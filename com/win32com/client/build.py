@@ -25,6 +25,10 @@ from pywintypes import TimeType
 import winerror
 import datetime
 
+TYPE_HINTS_NONE = None
+TYPE_HINTS_FULL = "full"
+TYPE_HINTS_STUBS_ONLY = "stubs"
+
 # It isn't really clear what the quoting rules are in a C/IDL string and
 # literals like a quote char and backslashes makes life a little painful to
 # always render the string perfectly - so just punt and fall-back to a repr()
@@ -327,14 +331,14 @@ class DispatchItem(OleItem):
 					out = out + 1
 		return ins, out, opts
 
-	def MakeFuncMethod(self, entry, name, bMakeClass = 1, bTypeHints = 0, iCreateEnums=0):
+	def MakeFuncMethod(self, entry, name, bMakeClass = 1, typeHints = None, iCreateEnums=0):
 		# If we have a type description, and not varargs...
 		if entry.desc is not None and (len(entry.desc) < 6 or entry.desc[6]!=-1):
-			return self.MakeDispatchFuncMethod(entry, name, bMakeClass, bTypeHints, iCreateEnums)
+			return self.MakeDispatchFuncMethod(entry, name, bMakeClass, typeHints, iCreateEnums)
 		else:
-			return self.MakeVarArgsFuncMethod(entry, name, bMakeClass, bTypeHints, iCreateEnums)
+			return self.MakeVarArgsFuncMethod(entry, name, bMakeClass, typeHints, iCreateEnums)
 
-	def MakeDispatchFuncMethod(self, entry, name, bMakeClass = 1, bTypeHints = 0, iCreateEnums=0):
+	def MakeDispatchFuncMethod(self, entry, name, bMakeClass = 1, typeHints = None, iCreateEnums=0):
 		fdesc = entry.desc
 		doc = entry.doc
 		names = entry.names
@@ -352,16 +356,20 @@ class DispatchItem(OleItem):
 		defOutArg = "pythoncom.Missing"
 		id = fdesc[0]
 
-		if bTypeHints:
+		if typeHints:
 			resultType = _MakeTypeHint(entry.resultDocumentation, fdesc[8][0])
 			linePostfix	= ') -> ' + resultType + ':'
 		else:
 			linePostfix	= '):'
 
-		s = linePrefix + 'def ' + name + '(self' + BuildCallList(fdesc, names, defNamedOptArg, defNamedNotOptArg, defUnnamedArg, defOutArg, bTypeHints=bTypeHints) + linePostfix
+		s = linePrefix + 'def ' + name + '(self' + BuildCallList(fdesc, names, defNamedOptArg, defNamedNotOptArg, defUnnamedArg, defOutArg, typeHints=typeHints) + linePostfix
 		ret.append(s)
 		if doc and doc[1]:
 			ret.append(linePrefix + '\t' + _makeDocString(doc[1]))
+
+		if typeHints == TYPE_HINTS_STUBS_ONLY:
+			ret.append(linePrefix + '\t...')
+			return ret
 
 #		print "fdesc is ", fdesc
 
@@ -416,7 +424,7 @@ class DispatchItem(OleItem):
 		ret.append("")
 		return ret
 
-	def MakeVarArgsFuncMethod(self, entry, name, bMakeClass = 1, bTypeHints = 0, iCreateEnums=0):
+	def MakeVarArgsFuncMethod(self, entry, name, bMakeClass = 1, typeHints = None, iCreateEnums=0):
 		fdesc = entry.desc
 		names = entry.names
 		doc = entry.doc
@@ -645,7 +653,7 @@ def MakeDefaultArgRepr(defArgVal):
     return repr(val)
   return None
 
-def BuildCallList(fdesc, names, defNamedOptArg, defNamedNotOptArg, defUnnamedArg, defOutArg, is_comment = False, bTypeHints = 0):
+def BuildCallList(fdesc, names, defNamedOptArg, defNamedNotOptArg, defUnnamedArg, defOutArg, is_comment = False, typeHints = None):
   "Builds a Python declaration for a method."
   # Names[0] is the func name - param names are from 1.
   numArgs = len(fdesc[2])
@@ -683,8 +691,8 @@ def BuildCallList(fdesc, names, defNamedOptArg, defNamedNotOptArg, defUnnamedArg
 
     argName = MakePublicAttributeName(argName)
 
-    if bTypeHints:
-        resultType = _MakeTypeHint(thisdesc[4], thisdesc[0])
+    if typeHints:
+        resultType = _MakeTypeHint(thisdesc[4], thisdesc[0]) or "typing.Any"
         argName += ': ' + resultType
 
     # insanely long lines with an 'encoding' flag crashes python 2.4.0
