@@ -658,7 +658,16 @@ class CoClassItem(build.OleItem, WritableItem):
       print("# This CoClass is known by the name '%s'" % (progId), file=stream)
     except pythoncom.com_error:
       pass
-    baseClass = "CoClassBaseClass" if generator.typeHints != TYPE_HINTS_STUBS_ONLY else "typing.Protocol"
+
+    baseClass = "CoClassBaseClass"
+    if generator.typeHints == TYPE_HINTS_STUBS_ONLY:
+        baseClasses = []
+        for item, flag in self.interfaces:
+            # If we have written a class use it as the base class
+            if item.bWritten:
+                baseClasses.append(item.python_name)
+        baseClass = ", ".join(baseClasses) if baseClasses else "typing.Protocol"
+
     print('class %s(%s): # A CoClass' % (self.python_name, baseClass), file=stream)
     if doc and doc[1]: print('\t# ' + doc[1], file=stream)
     if generator.typeHints == TYPE_HINTS_STUBS_ONLY:
