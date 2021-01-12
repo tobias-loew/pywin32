@@ -214,7 +214,7 @@ def GetTypeLibsForSpec(arg):
 		tb = None # Storing tb in a local is a cycle!
 		sys.exit(1)
 
-def GenerateFromTypeLibSpec(typelibInfo, file = None, verboseLevel = None, progressInstance = None, bUnicodeToString=None, bForDemand = bForDemandDefault, bBuildHidden = 1, iCreateEnums = 0, bTypeHints = 0):
+def GenerateFromTypeLibSpec(typelibInfo, file = None, verboseLevel = None, progressInstance = None, bUnicodeToString=None, bForDemand = bForDemandDefault, bBuildHidden = 1, iCreateEnums = 0, typeHints = None):
 	assert bUnicodeToString is None, "this is deprecated and will go away"
 	if verboseLevel is None:
 		verboseLevel = 0 # By default, we use no gui and no verbose level!
@@ -256,7 +256,7 @@ def GenerateFromTypeLibSpec(typelibInfo, file = None, verboseLevel = None, progr
 	bToGenDir = (file is None)
 
 	for typelib, info in typelibs:
-		gen = genpy.Generator(typelib, info.dll, progress, bBuildHidden=bBuildHidden, iCreateEnums=iCreateEnums, bTypeHints=bTypeHints)
+		gen = genpy.Generator(typelib, info.dll, progress, bBuildHidden=bBuildHidden, iCreateEnums=iCreateEnums, typeHints=typeHints)
 
 		if file is None:
 			this_name = gencache.GetGeneratedFileName(info.clsid, info.lcid, info.major, info.minor)
@@ -273,6 +273,11 @@ def GenerateFromTypeLibSpec(typelibInfo, file = None, verboseLevel = None, progr
 				outputName = os.path.join(full_name, "__init__.py")
 			else:
 				outputName = full_name + ".py"
+
+			if typeHints == genpy.TYPE_HINTS_STUBS_ONLY:
+				name, ext = os.path.splitext(outputName)
+				outputName = name + ".pyi"
+
 			fileUse = gen.open_writer(outputName)
 			progress.LogBeginGenerate(outputName)
 		else:
@@ -334,10 +339,10 @@ def main():
 	doit = 1
 	bForDemand = bForDemandDefault
 	createEnums = 0
-	typeHints = 0
+	typeHints = None
 
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], 'vo:huiqdte')
+		opts, args = getopt.getopt(sys.argv[1:], 'vo:huiqdte', ['type-hints='])
 		for o,v in opts:
 			if o=='-h':
 				hiddenSpec = 0
@@ -359,7 +364,9 @@ def main():
 			elif o=='-e':
 				createEnums = 2
 			elif o=='-t':
-				typeHints = 1
+				typeHints = genpy.TYPE_HINTS_FULL
+			elif o=='--type-hints':
+				typeHints = v or genpy.TYPE_HINTS_FULL
 
 	except (getopt.error, error) as msg:
 		sys.stderr.write (str(msg) + "\n")
@@ -390,7 +397,7 @@ def main():
 		f = None
 
 	for arg in args:
-		GenerateFromTypeLibSpec(arg, f, verboseLevel = verboseLevel, bForDemand = bForDemand, bBuildHidden = hiddenSpec, iCreateEnums=createEnums, bTypeHints=typeHints)
+		GenerateFromTypeLibSpec(arg, f, verboseLevel = verboseLevel, bForDemand = bForDemand, bBuildHidden = hiddenSpec, iCreateEnums=createEnums, typeHints=typeHints)
 
 	if f:
 		f.close()
