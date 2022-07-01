@@ -24,7 +24,7 @@ usageHelp = """ \
 
 Usage:
 
-  makepy.py [-i] [-v|q] [-h] [-u] [-e] [-f] [-t] [-o output_file] [-d] [typelib, ...]
+  makepy.py [-i] [-v|q] [-h] [-u] [-e] [-t] [-o output_file] [-d] [typelib, ...]
 
   -i    -- Show information for the specified typelib.
 
@@ -71,8 +71,8 @@ Examples:
 """
 
 import sys, os, importlib, pythoncom
-from win32com.client import Dispatch
 from win32com.client import genpy, selecttlb, gencache
+from win32com.client import Dispatch
 
 bForDemandDefault = 0  # Default value of bForDemand - toggle this to change the world - see also gencache.py
 
@@ -247,7 +247,7 @@ def GenerateFromTypeLibSpec(
     bForDemand=bForDemandDefault,
     bBuildHidden=1,
     iCreateEnums = 0,
-     bTypeHints = False,
+    bTypeHints = False,
 ):
     assert bUnicodeToString is None, "this is deprecated and will go away"
     if verboseLevel is None:
@@ -279,7 +279,7 @@ def GenerateFromTypeLibSpec(
     elif hasattr(typelibInfo, "GetLibAttr"):
         # A real typelib object!
         # Could also use isinstance(typelibInfo, PyITypeLib) instead, but PyITypeLib is not directly exposed by pythoncom.
-        #     pythoncom.TypeIIDs[pythoncom.IID_ITypeLib] seems to work
+        # 	pythoncom.TypeIIDs[pythoncom.IID_ITypeLib] seems to work
         tla = typelibInfo.GetLibAttr()
         guid = tla[0]
         lcid = tla[1]
@@ -417,7 +417,7 @@ def main():
             elif o=='-e':
                 createEnums = 2
             elif o=='-t':
-                typeHints = 1
+                typeHints = True
 
     except (getopt.error) as msg:
         sys.stderr.write(str(msg) + "\n")

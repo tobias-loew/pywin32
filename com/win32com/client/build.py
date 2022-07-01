@@ -255,18 +255,18 @@ class DispatchItem(OleItem):
 
         # We need to translate any Alias', Enums, structs etc in result and args
         typerepr, flag, defval = fdesc.rettype
-        #         sys.stderr.write("%s result - %s -> " % (name, typerepr))
+        # 		sys.stderr.write("%s result - %s -> " % (name, typerepr))
         typerepr, resultCLSID, resultDoc, resultKind = _ResolveType(typerepr, typeinfo, iCreateEnums)
-        #         sys.stderr.write("%s\n" % (typerepr,))
+        # 		sys.stderr.write("%s\n" % (typerepr,))
         fdesc.rettype = typerepr, flag, defval, resultCLSID, resultDoc, resultKind
         # Translate any Alias or Enums in argument list.
         argList = []
         for argDesc in fdesc.args:
             typerepr, flag, defval = argDesc
-            #             sys.stderr.write("%s arg - %s -> " % (name, typerepr))
+            # 			sys.stderr.write("%s arg - %s -> " % (name, typerepr))
             arg_type, arg_clsid, arg_doc, arg_kind = _ResolveType(typerepr, typeinfo, iCreateEnums)
             argDesc = arg_type, flag, defval, arg_clsid, arg_doc, arg_kind
-            #             sys.stderr.write("%s\n" % (argDesc[0],))
+            # 			sys.stderr.write("%s\n" % (argDesc[0],))
             argList.append(argDesc)
         fdesc.args = tuple(argList)
 
@@ -298,8 +298,8 @@ class DispatchItem(OleItem):
         else:
             map = None
         if not map is None:
-            #                 if map.has_key(name):
-            #                     sys.stderr.write("Warning - overwriting existing method/attribute %s\n" % name)
+            # 				if map.has_key(name):
+            # 					sys.stderr.write("Warning - overwriting existing method/attribute %s\n" % name)
             map[name] = MapEntry(fdesc, names, doc, resultCLSID, resultDoc, hidden)
             # any methods that can't be reached via DISPATCH we return None
             # for, so dynamic dispatch doesnt see it.
@@ -422,8 +422,9 @@ class DispatchItem(OleItem):
                 defNamedNotOptArg,
                 defUnnamedArg,
                 defOutArg,
+                bTypeHints=bTypeHints,
             )
-             + linePostfix
+            + linePostfix
         )
         ret.append(s)
         if doc and doc[1]:
@@ -660,7 +661,7 @@ def _ResolveType(typerepr, itypeinfo, iCreateEnums):
             if typeKind == pythoncom.TKIND_ALIAS:
                 tdesc = resultAttr.tdescAlias
                 return _ResolveType(tdesc, resultTypeInfo, iCreateEnums)
-            elif typeKind in [pythoncom.TKIND_ENUM, pythoncom.TKIND_MODULE]:
+            elif typeKind in [pythoncom.TKIND_MODULE]:
                 # For now, assume Long
                 return pythoncom.VT_I4, None, None, typeKind
 
@@ -844,9 +845,9 @@ def BuildCallList(
 
         argName = MakePublicAttributeName(argName)
 
-    if bTypeHints:
-        resultType = _MakeTypeHint(thisdesc[4], thisdesc[0])
-        argName += ': ' + resultType
+        if bTypeHints:
+            resultType = _MakeTypeHint(thisdesc[4], thisdesc[0])
+            argName += ': ' + resultType
 
         # insanely long lines with an 'encoding' flag crashes python 2.4.0
         # keep 5 args per line

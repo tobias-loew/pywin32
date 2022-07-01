@@ -928,7 +928,7 @@ class Generator:
         sourceFilename,
         progressObject,
         bBuildHidden=1,
-        bUnicodeToString=None, 
+        bUnicodeToString=None,
         iCreateEnums = 0, 
         bTypeHints = False,
     ):
