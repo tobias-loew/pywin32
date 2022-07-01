@@ -279,7 +279,7 @@ def GenerateFromTypeLibSpec(
     elif hasattr(typelibInfo, "GetLibAttr"):
         # A real typelib object!
         # Could also use isinstance(typelibInfo, PyITypeLib) instead, but PyITypeLib is not directly exposed by pythoncom.
-        # 	pythoncom.TypeIIDs[pythoncom.IID_ITypeLib] seems to work
+        #     pythoncom.TypeIIDs[pythoncom.IID_ITypeLib] seems to work
         tla = typelibInfo.GetLibAttr()
         guid = tla[0]
         lcid = tla[1]
@@ -391,11 +391,11 @@ def main():
     verboseLevel = 1
     doit = 1
     bForDemand = bForDemandDefault
-	createEnums = 0
-	typeHints = 0
+    createEnums = 0
+    typeHints = 0
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqd")
+        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqdte")
         for o, v in opts:
             if o == "-h":
                 hiddenSpec = 0
@@ -414,12 +414,12 @@ def main():
                 doit = 0
             elif o == "-d":
                 bForDemand = not bForDemand
-			elif o=='-e':
-				createEnums = 2
-			elif o=='-t':
-				typeHints = 1
+            elif o=='-e':
+                createEnums = 2
+            elif o=='-t':
+                typeHints = 1
 
-    except (getopt.error, error) as msg:
+    except (getopt.error) as msg:
         sys.stderr.write(str(msg) + "\n")
         usage()
 

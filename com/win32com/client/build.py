@@ -77,34 +77,34 @@ for v in NoTranslateTypes:
 
 
 NativeTypeMap = {
-	pythoncom.VT_BOOL : 'bool',          
-	# pythoncom.VT_CLSID,        
-	pythoncom.VT_CY : 'float',
-	pythoncom.VT_DATE : 'float',         
-	pythoncom.VT_DECIMAL : 'float',       
-	pythoncom.VT_EMPTY : 'None',
-	pythoncom.VT_ERROR : 'int',
-	pythoncom.VT_FILETIME : 'float',   
-	pythoncom.VT_HRESULT : 'int',
-	pythoncom.VT_I1 : 'int',            
-	pythoncom.VT_I2 : 'int',           
-	pythoncom.VT_I4 : 'int',
-	pythoncom.VT_I8 : 'int',            
-	pythoncom.VT_INT : 'int',          
-	pythoncom.VT_NULL : 'None',
-	pythoncom.VT_R4 : 'float',           
-	pythoncom.VT_R8 : 'float', 
-#	pythoncom.VT_STREAM,
-	pythoncom.VT_UI1 : 'int',            
-	pythoncom.VT_UI2 : 'int',           
-	pythoncom.VT_UI4 : 'int',
-	pythoncom.VT_UI8 : 'int',            
-	pythoncom.VT_UINT : 'int',          
-	pythoncom.VT_VOID : 'None',
-	pythoncom.VT_BSTR : 'str',
-	pythoncom.VT_VARIANT : 'typing.Any',
-	pythoncom.VT_DISPATCH : 'Dispatch',
-	pythoncom.VT_UNKNOWN : 'typing.Any',
+    pythoncom.VT_BOOL : 'bool',          
+    # pythoncom.VT_CLSID,        
+    pythoncom.VT_CY : 'float',
+    pythoncom.VT_DATE : 'float',         
+    pythoncom.VT_DECIMAL : 'float',       
+    pythoncom.VT_EMPTY : 'None',
+    pythoncom.VT_ERROR : 'int',
+    pythoncom.VT_FILETIME : 'float',   
+    pythoncom.VT_HRESULT : 'int',
+    pythoncom.VT_I1 : 'int',            
+    pythoncom.VT_I2 : 'int',           
+    pythoncom.VT_I4 : 'int',
+    pythoncom.VT_I8 : 'int',            
+    pythoncom.VT_INT : 'int',          
+    pythoncom.VT_NULL : 'None',
+    pythoncom.VT_R4 : 'float',           
+    pythoncom.VT_R8 : 'float', 
+#   pythoncom.VT_STREAM,
+    pythoncom.VT_UI1 : 'int',            
+    pythoncom.VT_UI2 : 'int',           
+    pythoncom.VT_UI4 : 'int',
+    pythoncom.VT_UI8 : 'int',            
+    pythoncom.VT_UINT : 'int',          
+    pythoncom.VT_VOID : 'None',
+    pythoncom.VT_BSTR : 'str',
+    pythoncom.VT_VARIANT : 'typing.Any',
+    pythoncom.VT_DISPATCH : 'Dispatch',
+    pythoncom.VT_UNKNOWN : 'typing.Any',
 
 }
 
@@ -255,18 +255,18 @@ class DispatchItem(OleItem):
 
         # We need to translate any Alias', Enums, structs etc in result and args
         typerepr, flag, defval = fdesc.rettype
-        # 		sys.stderr.write("%s result - %s -> " % (name, typerepr))
+        #         sys.stderr.write("%s result - %s -> " % (name, typerepr))
         typerepr, resultCLSID, resultDoc, resultKind = _ResolveType(typerepr, typeinfo, iCreateEnums)
-        # 		sys.stderr.write("%s\n" % (typerepr,))
+        #         sys.stderr.write("%s\n" % (typerepr,))
         fdesc.rettype = typerepr, flag, defval, resultCLSID, resultDoc, resultKind
         # Translate any Alias or Enums in argument list.
         argList = []
         for argDesc in fdesc.args:
             typerepr, flag, defval = argDesc
-            # 			sys.stderr.write("%s arg - %s -> " % (name, typerepr))
+            #             sys.stderr.write("%s arg - %s -> " % (name, typerepr))
             arg_type, arg_clsid, arg_doc, arg_kind = _ResolveType(typerepr, typeinfo, iCreateEnums)
             argDesc = arg_type, flag, defval, arg_clsid, arg_doc, arg_kind
-            # 			sys.stderr.write("%s\n" % (argDesc[0],))
+            #             sys.stderr.write("%s\n" % (argDesc[0],))
             argList.append(argDesc)
         fdesc.args = tuple(argList)
 
@@ -298,8 +298,8 @@ class DispatchItem(OleItem):
         else:
             map = None
         if not map is None:
-            # 				if map.has_key(name):
-            # 					sys.stderr.write("Warning - overwriting existing method/attribute %s\n" % name)
+            #                 if map.has_key(name):
+            #                     sys.stderr.write("Warning - overwriting existing method/attribute %s\n" % name)
             map[name] = MapEntry(fdesc, names, doc, resultCLSID, resultDoc, hidden)
             # any methods that can't be reached via DISPATCH we return None
             # for, so dynamic dispatch doesnt see it.
@@ -438,14 +438,14 @@ class DispatchItem(OleItem):
         retDesc = fdesc[8][:2]
         argsDesc = tuple([what[:2] for what in fdesc[2]])
 
-		if iCreateEnums != 0 and fdesc[8][5] == pythoncom.TKIND_ENUM:
-			# here we can encode the enum-name as type
-			#resclsid = _MakeResultTypeCreator(entry.resultDocumentation, fdesc[8][0])
-			result_prefix = fdesc[8][4][0] + '('
-			result_postfix = ')'
-		else:
-			result_prefix = ''
-			result_postfix = ''
+        if iCreateEnums != 0 and fdesc[8][5] == pythoncom.TKIND_ENUM:
+            # here we can encode the enum-name as type
+            #resclsid = _MakeResultTypeCreator(entry.resultDocumentation, fdesc[8][0])
+            result_prefix = fdesc[8][4][0] + '('
+            result_postfix = ')'
+        else:
+            result_prefix = ''
+            result_postfix = ''
 
         # The runtime translation of the return types is expensive, so when we know the
         # return type of the function, there is no need to check the type at runtime.
@@ -595,20 +595,20 @@ typeSubstMap = {
 }
 
 def _MakeTypeHint(doc, vt):
-	if doc:
-		resultType = doc[0]
-	else:
-		resultType = NativeTypeMap.get(vt & 0xfff)
-	if vt & 0x2000:
-		resultType = 'typing.List[' + resultType + ']'
-	return resultType
+    if doc:
+        resultType = doc[0]
+    else:
+        resultType = NativeTypeMap.get(vt & 0xfff)
+    if vt & 0x2000:
+        resultType = 'typing.List[' + resultType + ']'
+    return resultType
 
 def _MakeResultTypeCreator(doc, vt):
-	if doc:
-		resultType = doc[0]
-	else:
-		resultType = NativeTypeMap.get(vt & 0xfff)
-	return resultType, vt & 0x2000
+    if doc:
+        resultType = doc[0]
+    else:
+        resultType = NativeTypeMap.get(vt & 0xfff)
+    return resultType, vt & 0x2000
 
 
 def _ResolveType(typerepr, itypeinfo, iCreateEnums):
@@ -664,12 +664,12 @@ def _ResolveType(typerepr, itypeinfo, iCreateEnums):
                 # For now, assume Long
                 return pythoncom.VT_I4, None, None, typeKind
 
-			elif typeKind in [pythoncom.TKIND_ENUM]:
-				if iCreateEnums != 0:
-					retdoc = resultTypeInfo.GetDocumentation(-1)
-					return pythoncom.VT_I4, None, retdoc, typeKind
-				else:
-					return pythoncom.VT_I4, None, None, typeKind
+            elif typeKind in [pythoncom.TKIND_ENUM]:
+                if iCreateEnums != 0:
+                    retdoc = resultTypeInfo.GetDocumentation(-1)
+                    return pythoncom.VT_I4, None, retdoc, typeKind
+                else:
+                    return pythoncom.VT_I4, None, None, typeKind
 
             elif typeKind == pythoncom.TKIND_DISPATCH:
                 clsid = resultTypeInfo.GetTypeAttr()[0]
