@@ -659,8 +659,10 @@ def _ResolveType(typerepr, itypeinfo, iCreateEnums):
             resultAttr = resultTypeInfo.GetTypeAttr()
             typeKind = resultAttr.typekind
             if typeKind == pythoncom.TKIND_ALIAS:
+                alias_retdoc = resultTypeInfo.GetDocumentation(-1)
                 tdesc = resultAttr.tdescAlias
-                return _ResolveType(tdesc, resultTypeInfo, iCreateEnums)
+                aliased_typerepr, aliased_resultCLSID, aliased_resultDoc, aliased_resultKind = _ResolveType(tdesc, resultTypeInfo, iCreateEnums)
+                return aliased_typerepr, aliased_resultCLSID, alias_retdoc, aliased_resultKind
             elif typeKind in [pythoncom.TKIND_MODULE]:
                 # For now, assume Long
                 return pythoncom.VT_I4, None, None, typeKind
