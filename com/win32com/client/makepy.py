@@ -246,8 +246,8 @@ def GenerateFromTypeLibSpec(
     bUnicodeToString=None,
     bForDemand=bForDemandDefault,
     bBuildHidden=1,
-    iCreateEnums = 0,
-    bTypeHints = False,
+    iCreateEnums=0,
+    bTypeHints=False,
 ):
     assert bUnicodeToString is None, "this is deprecated and will go away"
     if verboseLevel is None:
@@ -297,7 +297,14 @@ def GenerateFromTypeLibSpec(
     bToGenDir = file is None
 
     for typelib, info in typelibs:
-        gen = genpy.Generator(typelib, info.dll, progress, bBuildHidden=bBuildHidden, iCreateEnums=iCreateEnums, bTypeHints=bTypeHints)
+        gen = genpy.Generator(
+            typelib,
+            info.dll,
+            progress,
+            bBuildHidden=bBuildHidden,
+            iCreateEnums=iCreateEnums,
+            bTypeHints=bTypeHints,
+        )
 
         if file is None:
             this_name = gencache.GetGeneratedFileName(
@@ -414,9 +421,9 @@ def main():
                 doit = 0
             elif o == "-d":
                 bForDemand = not bForDemand
-            elif o=='-e':
+            elif o == "-e":
                 createEnums = 2
-            elif o=='-t':
+            elif o == "-t":
                 typeHints = True
 
     except (getopt.error) as msg:
