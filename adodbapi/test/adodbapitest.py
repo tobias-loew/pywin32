@@ -21,13 +21,13 @@
     Updates by Vernon Cole
 """
 
-import unittest
-import sys
+import copy
 import datetime
 import decimal
-import copy
 import random
 import string
+import sys
+import unittest
 
 try:
     import win32com.client
@@ -45,7 +45,6 @@ import tryconnection
 import adodbapi
 import adodbapi.apibase as api
 
-
 try:
     import adodbapi.ado_consts as ado_consts
 except ImportError:  # we are doing a shortcut import as a module -- so
@@ -53,10 +52,6 @@ except ImportError:  # we are doing a shortcut import as a module -- so
         import ado_consts
     except ImportError:
         from adodbapi import ado_consts
-
-
-def str2bytes(sval):
-    return sval.encode("latin1")
 
 
 long = int
@@ -520,7 +515,7 @@ class CommonDBTests(unittest.TestCase):
             )
 
     def testDataTypeBinary(self):
-        binfld = str2bytes("\x07\x00\xE2\x40*")
+        binfld = b"\x07\x00\xE2\x40*"
         arv = [binfld, adodbapi.Binary(binfld), bytes(binfld)]
         if self.getEngine() == "PostgreSQL":
             self.helpTestDataType(
@@ -589,7 +584,7 @@ class CommonDBTests(unittest.TestCase):
         crsr = self.getCursor()
         self.helpCreateAndPopulateTableTemp(crsr)
         crsr.prepare("SELECT fldData FROM xx_%s" % config.tmp)
-        crsr.execute(crsr.command)  # remembes the one that was prepared
+        crsr.execute(crsr.command)  # remember the one that was prepared
         rs = crsr.fetchall()
         assert len(rs) == 9
         assert rs[2][0] == 2

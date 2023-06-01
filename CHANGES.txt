@@ -8,9 +8,81 @@ All changes can be found via git - eg, for all changes afer a build:
 or
     https://github.com/mhammond/pywin32/compare/b3xx...main
 
+As of build 305, installation .exe files have been deprecated; see
+https://mhammond.github.io/pywin32_installers.html.
 
-Coming in build 305, as yet unreleased
+Coming in build 307, as yet unreleased
 --------------------------------------
+
+Build 306, released 2023-03-26
+------------------------------
+* Add GetSystemPowerStatus (#2010, @CristiFati)
+
+* Add CascadeWindows (#1999, @CristiFati)
+
+* Add win32gui.ResetDC
+
+* Fix leak in win32pdh.GetFormattedCounterArray
+
+* Fix IIS on later python versions (#2025)
+
+* Fix for service registration code updated in build 305 (#1985)
+
+* Support for Python 3.6 was dropped, support for later versions was improved.
+
+Build 305, released 2022-11-06
+------------------------------
+* Installation .exe files were deprecated.
+
+* @kxrob put a lot of work towards removing use of the deprecated Unicode
+  API so we can build on Python 3.12. This should be largely invisible, but
+  please report any unintended consequences.
+
+* odbc: Handle `varchar(max)`/`nvarchar(max)` column sizes (#1954)
+
+* win32api.GetTickCount() now returns an unsigned 64bit integer (@kxrob, #1946)
+
+* win32pipe.GetNamedPipeHandleState() now takes a 3rd optional param
+  indicating whether the username should be returned, and related constants
+  added. (@kxrob, #1946)
+
+* Add win32gui.GetTopWindow() and win32gui.GetAncestor() (#1928, @CristiFati)
+
+* Tweaks to how pywintypes searches for DLLs to better support virtualenvs
+  created with --system-site-packages. (@saaketp, #1933)
+
+* Added win32event.CreateWaitableTimerExW (#1945, @zariiii9003)
+
+* Changes in PARAM handling. Some functions which returned a WPARAM or LPARAM
+  allowed you to return a pointer to a Python buffer object or a PyUnicode.
+  These functions now only accept a Python long to be returned. Note that
+  this DOES NOT apply to functions with accept WPARAM or LPARAM as arguments,
+  only when they are being returned. Impacted functions are `OnNotify`
+  handler, LV_ITEM/TV_ITEM objects, PyIContextMenu3::HandleMenuMsg2, and the
+  result of a WNDPROC/DLGPROC (#1927).
+
+* service registration had an overhaul, avoiding a complicated, and ultimately
+  unnecessary "single globally registered service runner" concept.
+  Now, when registering a service, the host pythonservice.exe runner will be
+  copied to `sys.exec_prefix`, along with possibly `pywintypesXX.dll` and run
+  from there. (#1908)
+
+* Dropped support for allowing a bytes object to be passed where a COM BSTR
+  is expected - this support was accidental on the path from 2.x->3.x.
+
+* win32crypt's PyCERTSTORE.CertCloseStore()'s `Flags` argument has been
+  deprecated as it is likely to crash the process if
+  `CERT_CLOSE_STORE_FORCE_FLAG` is specified. The underlying function is now
+  always called with `CERT_CLOSE_STORE_CHECK_FLAG`, and support for this
+  param will be dropped at some point in the future.
+
+* Fix a bug where win32crypt.CryptQueryObject() would return a PyCTL_CONTEXT
+  object instead of a PyCERT_CONTEXT for base64 encoded certificates (#1859)
+
+* win32crypt.CryptQueryObject() is now able to return PyCTL_CONTEXT objects.
+  This is technically a breaking change as previously it would return the
+  address in memory of the object, but this address wasn't practically usable,
+  so it's very unlikely anyone relied on this behavior. (#1859)
 
 Build 304, released 2022-05-02
 ------------------------------

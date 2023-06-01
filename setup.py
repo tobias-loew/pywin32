@@ -1,4 +1,4 @@
-build_id = "304.1"  # may optionally include a ".{patchno}" suffix.
+build_id = "306"  # may optionally include a ".{patchno}" suffix.
 
 __doc__ = """This is a distutils setup-script for the pywin32 extensions.
 
@@ -23,39 +23,36 @@ build_env.md, which is getting out of date but might help getting everything
 required for an official build - see README.md for that process.
 """
 # Originally by Thomas Heller, started in 2000 or so.
-import os
-import string
-import sys
 import glob
-import re
-from tempfile import gettempdir
+import os
 import platform
+import re
 import shutil
 import subprocess
-
+import sys
 import winreg
 
-# The rest of our imports.
+# setuptools must be imported before distutils for markh in some python versions.
+# CI doesn't hit this, so not sure what's going on.
 from setuptools import setup
-from distutils.core import Extension
-from distutils.command.install import install
-from distutils.command.install_lib import install_lib
 from setuptools.command.build_ext import build_ext
-from distutils.command.build import build
-from distutils.command.install_data import install_data
 
 from distutils import log
-
+from distutils.command.build import build
+from distutils.command.install import install
+from distutils.command.install_data import install_data
+from distutils.command.install_lib import install_lib
+from distutils.core import Extension
+from tempfile import gettempdir
 
 # some modules need a static CRT to avoid problems caused by them having a
 # manifest.
 static_crt_modules = ["winxpgui"]
 
 
+import distutils.util
 from distutils.dep_util import newer_group
 from distutils.filelist import FileList
-from distutils.errors import DistutilsExecError, DistutilsSetupError
-import distutils.util
 
 build_id_patch = build_id
 if not "." in build_id_patch:
@@ -87,92 +84,6 @@ if os.path.dirname(this_file):
 # Start address we assign base addresses from.  See comment re
 # dll_base_address later in this file...
 dll_base_address = 0x1E200000
-
-# We need to know the platform SDK dir before we can list the extensions.
-def find_platform_sdk_dir():
-    # The user might have their current environment setup for the
-    # SDK, in which case "MSSDK_INCLUDE" and "MSSDK_LIB" vars must be set.
-    if "MSSDK_INCLUDE" in os.environ and "MSSDK_LIB" in os.environ:
-        print("Using SDK as specified in the environment")
-        return {
-            "include": os.environ["MSSDK_INCLUDE"].split(os.path.pathsep),
-            "lib": os.environ["MSSDK_LIB"].split(os.path.pathsep),
-        }
-
-    # Find the win 10 SDKs installed.
-    installedVersions = []
-    try:
-        key = winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Microsoft\Windows Kits\Installed Roots",
-            0,
-            winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
-        )
-        installRoot = winreg.QueryValueEx(key, "KitsRoot10")[0]
-        keyNo = 0
-        while 1:
-            try:
-                installedVersions.append(winreg.EnumKey(key, keyNo))
-                keyNo += 1
-            except winreg.error:
-                break
-    except EnvironmentError:
-        pass
-    if not installedVersions:
-        print("Can't find a windows 10 sdk")
-        return None
-
-    # We don't want to automatically used the latest as that's going to always
-    # be a moving target. Github's automation has "10.0.16299.0", so we target
-    # that if it exists, otherwise we use the earliest installed version.
-    ver = "10.0.16299.0"
-    if ver not in installedVersions:
-        print("Windows 10 SDK version", ver, "is preferred, but that's not installed")
-        print("Installed versions are", installedVersions)
-        ver = installedVersions[0]
-        print("Using", ver)
-    # no idea what these 'um' and 'winv6.3' paths actually mean and whether
-    # hard-coding them is appropriate, but here we are...
-    include = [os.path.join(installRoot, "include", ver, "um")]
-    if not os.path.exists(os.path.join(include[0], "windows.h")):
-        print(
-            "Found Windows sdk in", include, "but it doesn't appear to have windows.h"
-        )
-        return None
-    include.append(os.path.join(installRoot, "include", ver, "shared"))
-    lib = [os.path.join(installRoot, "lib", ver, "um")]
-    return {"include": include, "lib": lib}
-
-
-sdk_info = find_platform_sdk_dir()
-if not sdk_info:
-    print()
-    print("It looks like you are trying to build pywin32 in an environment without")
-    print("the necessary tools installed. It's much easier to grab binaries!")
-    print()
-    print("Please read the docstring at the top of this file, or read README.md")
-    print("for more information.")
-    print()
-    raise RuntimeError("Can't find the Windows SDK")
-
-
-def find_visual_studio_file(pattern):
-    try:
-        files = subprocess.check_output(
-            [
-                os.path.expandvars(
-                    r"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-                ),
-                "-utf8",
-                "-prerelease",
-                "-find",
-                pattern,
-            ],
-            encoding="utf-8",
-        ).splitlines()
-        return files[-1]
-    except (IndexError, OSError):
-        return None
 
 
 class WinExt(Extension):
@@ -429,7 +340,7 @@ class WinExt_system32(WinExt):
 class WinExt_pythonservice(WinExt):
     # special handling because it's a "console" exe.
     def finalize_options(self, build_ext):
-        WinExt_win32.finalize_options(self, build_ext)
+        WinExt.finalize_options(self, build_ext)
 
         if build_ext.mingw32:
             self.extra_link_args.append("-mconsole")
@@ -437,12 +348,15 @@ class WinExt_pythonservice(WinExt):
         else:
             self.extra_link_args.append("/SUBSYSTEM:CONSOLE")
 
+    # pythonservice.exe goes in win32, where it doesn't actually work, but
+    # win32serviceutil manages to copy it to where it does.
     def get_pywin32_dir(self):
         return "win32"
 
 
 ################################################################
 # Extensions to the distutils commands.
+
 
 # 'build' command
 class my_build(build):
@@ -468,19 +382,7 @@ class my_build_ext(build_ext):
         }.get(self.plat_name, "x86")
 
         self.windows_h_version = None
-        # The afxres.h/atls.lib files aren't always included by default,
-        # so find and add them
-        atls_lib = find_visual_studio_file(
-            r"VC\Tools\MSVC\*\ATLMFC\lib\{}\atls.lib".format(self.plat_dir)
-        )
-        if atls_lib:
-            self.library_dirs.append(os.path.dirname(atls_lib))
-            self.include_dirs.append(
-                os.path.join(
-                    os.path.dirname(os.path.dirname(os.path.dirname(atls_lib))),
-                    "Include",
-                )
-            )
+
         # The pywintypes library is created in the build_temp
         # directory, so we need to add this to library_dirs
         self.library_dirs.append(self.build_temp)
@@ -490,61 +392,6 @@ class my_build_ext(build_ext):
 
         self.excluded_extensions = []  # list of (ext, why)
         self.swig_cpp = True  # hrm - deprecated - should use swig_opts=-c++??
-
-    def _fixup_sdk_dirs(self):
-        # Adjust paths etc for the platform SDK - the default paths used by
-        # distutils don't include the platform SDK.
-        # Note that just having them in INCLUDE/LIB does *not* work -
-        # distutils thinks it knows better, and resets those vars (see notes
-        # below about how the paths are put together)
-
-        # Called after the compiler is initialized, but before the extensions
-        # are built.  NOTE: this means setting self.include_dirs etc will
-        # have no effect, so we poke our path changes directly into the
-        # compiler (we can't call this *before* the compiler is setup, as
-        # then our environment changes would have no effect - see below)
-
-        # distutils puts the path together like so:
-        # * compiler command line includes /I entries for each dir in
-        #   ext.include_dir + build_ext.include_dir (ie, extension's come first)
-        # * The compiler initialization sets the INCLUDE/LIB etc env vars to the
-        #   values read from the registry (ignoring anything that was there)
-
-        # We are also at the mercy of how MSVC processes command-line
-        # includes vs env vars (presumably environment comes last) - so,
-        # moral of the story:
-        # * To get a path at the start, it must be at the start of
-        #   ext.includes
-        # * To get a path at the end, it must be at the end of
-        #   os.environ("INCLUDE")
-        # Note however that the environment tweaking can only be done after
-        # the compiler has set these vars, which is quite late -
-        # build_ext.run() - so global environment hacks are done in our
-        # build_extensions() override)
-        #
-        # Also note that none of our extensions have individual include files
-        # that must be first - so for practical purposes, any entry in
-        # build_ext.include_dirs should 'win' over the compiler's dirs.
-        assert self.compiler.initialized  # if not, our env changes will be lost!
-
-        for extra in sdk_info["include"]:
-            # should not be possible for the SDK dirs to already be in our
-            # include_dirs - they may be in the registry etc from MSVC, but
-            # those aren't reflected here...
-            assert extra not in self.include_dirs
-            # and we will not work as expected if the dirs don't exist
-            assert os.path.isdir(extra), "%s doesn't exist!" % (extra,)
-            self.compiler.add_include_dir(extra)
-        # and again for lib dirs.
-        for extra in sdk_info["lib"]:
-            extra = os.path.join(extra, self.plat_dir)
-            assert os.path.isdir(extra), extra
-            assert extra not in self.library_dirs  # see above
-            assert os.path.isdir(extra), "%s doesn't exist!" % (extra,)
-            self.compiler.add_library_dir(extra)
-
-        log.debug("After SDK processing, includes are %s", self.compiler.include_dirs)
-        log.debug("After SDK processing, libs are %s", self.compiler.library_dirs)
 
     def _why_cant_build_extension(self, ext):
         # Return None, or a reason it can't be built.
@@ -583,7 +430,7 @@ class my_build_ext(build_ext):
                 if os.path.isfile(os.path.join(d, h)):
                     break
             else:
-                log.debug("Looked for %s in %s", h, look_dirs)
+                log.debug("Header '%s' not found  in %s", h, look_dirs)
                 return "The header '%s' can not be located." % (h,)
 
         common_dirs = self.compiler.library_dirs[:]
@@ -596,7 +443,7 @@ class my_build_ext(build_ext):
                 look_dirs = common_dirs + ext.library_dirs
                 found = self.compiler.find_library_file(look_dirs, lib, self.debug)
                 if not found:
-                    log.debug("Looked for %s in %s", lib, look_dirs)
+                    log.debug("Lib '%s' not found in %s", lib, look_dirs)
                     return "No library '%s'" % lib
                 self.found_libraries[lib.lower()] = found
             patched_libs.append(os.path.splitext(os.path.basename(found))[0])
@@ -652,9 +499,9 @@ class my_build_ext(build_ext):
 
         cwd = os.getcwd()
         old_env = os.environ.copy()
-        os.chdir(path)
         os.environ["INCLUDE"] = os.pathsep.join(self.compiler.include_dirs)
         os.environ["LIB"] = os.pathsep.join(self.compiler.library_dirs)
+        os.chdir(path)
         try:
             cmd = [nmake, "/nologo", "/f", makefile] + makeargs
             self.compiler.spawn(cmd)
@@ -673,16 +520,72 @@ class my_build_ext(build_ext):
             os.path.join(self.build_lib, "pythonwin"),
         )
 
+    # find the VC base path corresponding to distutils paths, and
+    # potentially upgrade for extra include / lib paths (MFC)
+    def _check_vc(self):
+        vcbase = vcverdir = None
+        atlmfc_found = False
+        for _dir in self.compiler.library_dirs:
+            m = re.search(r"(?i)VC\\([\d.]+\\)?(LIB)\b", _dir)
+            if m and not vcbase:
+                vcbase = _dir[: m.start(2)]
+                vcverdir = m.group(1)
+            m = re.search(r"(?i)ATLMFC\\LIB\b", _dir)
+            if m:
+                atlmfc_found = True  # ATLMFC libs/includes already found by distutils
+
+        if not vcbase and not self.mingw32:
+            print("-- compiler.library_dirs:", self.compiler.library_dirs)
+            # Error or warn? last hope would be a non-standard build environment
+            print("-- Visual C base path not found !?")
+
+        # The afxres.h/atls.lib files aren't always included by default,
+        # so find and add them
+        if vcbase and not atlmfc_found:
+            atls_lib = glob.glob(
+                vcbase + r"ATLMFC\lib\{}\atls.lib".format(self.plat_dir)
+            )
+            if atls_lib:
+                self.library_dirs.append(os.path.dirname(atls_lib[0]))
+                self.include_dirs.append(
+                    os.path.join(
+                        os.path.dirname(os.path.dirname(os.path.dirname(atls_lib[0]))),
+                        "Include",
+                    )
+                )
+            else:
+                print("-- compiler.library_dirs:", self.compiler.library_dirs)
+                print("-- ATLMFC paths likely missing (Required for win32ui)")
+        return vcbase, vcverdir
+
     def build_extensions(self):
         # First, sanity-check the 'extensions' list
         self.check_extensions_list(self.extensions)
 
         self.found_libraries = {}
 
-        if not self.compiler.initialized:
+        if hasattr(self.compiler, "initialize") and not self.compiler.initialized:
             self.compiler.initialize()
 
-        self._fixup_sdk_dirs()
+        # XXX this distutils class var peek hack should become obsolete
+        # (silently) when https://github.com/pypa/distutils/pull/172 is
+        # resolved.
+        # _why_cant_build_extension() and _build_scintilla() at least need
+        # complete VC+SDK inspectable inc / lib dirs.
+        classincs = getattr(self.compiler.__class__, "include_dirs", [])
+        if classincs:
+            print("-- distutils hack to expose all include & lib dirs")
+            print("-- orig compiler.include_dirs:", self.compiler.include_dirs)
+            print("-- orig compiler.library_dirs:", self.compiler.library_dirs)
+            self.compiler.include_dirs += classincs
+            self.compiler.__class__.include_dirs = []
+            classlibs = getattr(self.compiler.__class__, "library_dirs", [])
+            self.compiler.library_dirs += classlibs
+            self.compiler.__class__.library_dirs = []
+        else:
+            print("-- FIX ME ! distutils may expose complete inc/lib dirs again")
+
+        vcbase, vcverdir = self._check_vc()
 
         # Here we hack a "pywin32" directory (one of 'win32', 'win32com',
         # 'pythonwin' etc), as distutils doesn't seem to like the concept
@@ -696,6 +599,7 @@ class my_build_ext(build_ext):
             self.build_extension(ext)
 
         for ext in W32_exe_files:
+            self.package = ext.get_pywin32_dir()
             ext.finalize_options(self)
             why = self._why_cant_build_extension(ext)
             if why is not None:
@@ -703,12 +607,15 @@ class my_build_ext(build_ext):
                 assert why, "please give a reason, or None"
                 print("Skipping %s: %s" % (ext.name, why))
                 continue
-
-            try:
-                self.package = ext.get_pywin32_dir()
-            except AttributeError:
-                raise RuntimeError("Not a win32 package!")
             self.build_exefile(ext)
+
+        # Error when too many skips
+        if len(self.excluded_extensions) > 0.3 * (
+            len(self.extensions) + len(W32_exe_files)
+        ):
+            print("-- compiler.include_dirs:", self.compiler.include_dirs)
+            print("-- compiler.library_dirs:", self.compiler.library_dirs)
+            raise RuntimeError("Too many extensions skipped, check build environment")
 
         # Not sure how to make this completely generic, and there is no
         # need at this stage.
@@ -728,24 +635,32 @@ class my_build_ext(build_ext):
                 suffix = "_d"
             fname = clib_file[1] % suffix
             self.copy_file(os.path.join(self.build_temp, fname), target_dir)
-        # The MFC DLLs.
-        target_dir = os.path.join(self.build_lib, "pythonwin")
 
-        # Use `vswhere` to find MFC
-        canary_dll = find_visual_studio_file(
-            r"VC\Redist\MSVC\*\{}\*\mfc140u.dll".format(self.plat_dir)
-        )
-        mfc_dir = os.path.dirname(canary_dll)
-        mfc_contents = [os.path.join(mfc_dir, p) for p in os.listdir(mfc_dir)]
-
-        if not mfc_contents:
-            raise RuntimeError("No MFC files found!")
-
-        for mfc_content in mfc_contents:
-            shutil.copyfile(
-                mfc_content,
-                os.path.join(target_dir, os.path.split(mfc_content)[1]),
+        # Finally find and copy the MFC redistributable DLLs.
+        win32ui_ext = pythonwin_extensions[0]
+        if win32ui_ext not in set(self.extensions) - {
+            ext for ext, why in self.excluded_extensions
+        }:
+            return
+        if not vcbase:
+            raise RuntimeError("Can't find MFC redist DLLs with unkown VC base path")
+        redist_globs = [vcbase + r"redist\%s\*MFC\mfc140u.dll" % self.plat_dir]
+        m = re.search(r"\\VC\\Tools\\", vcbase)
+        if m:
+            # typical path on newer Visual Studios - ensure corresponding version
+            redist_globs.append(
+                vcbase[: m.start()]
+                + r"\VC\Redist\MSVC\%s%s\*\mfc140u.dll"
+                % (vcverdir or "*\\", self.plat_dir)
             )
+        # Only mfcNNNu DLL is required (mfcmNNNX is Windows Forms, rest is ANSI)
+        mfc_contents = next(filter(None, map(glob.glob, redist_globs)), [])[:1]
+        if not mfc_contents:
+            raise RuntimeError("MFC redist DLLs not found like %r!" % redist_globs)
+
+        target_dir = os.path.join(self.build_lib, win32ui_ext.get_pywin32_dir())
+        for mfc_content in mfc_contents:
+            self.copy_file(mfc_content, target_dir)
 
     def build_exefile(self, ext):
         _d = self.debug and "_d" or ""
@@ -1131,7 +1046,7 @@ class my_compiler(base_compiler):
                 # ignore it for now
                 if platform.machine() != "ARM64":
                     print(
-                        "** If you want to skip this step, pass '--skip-verstamp' on the command-line"
+                        "** If you want to skip this step, pass '--skip-verstamp' on the setup.py command-line"
                     )
                     raise
 
@@ -1150,7 +1065,6 @@ class my_compiler(base_compiler):
     def spawn(self, cmd):
         is_link = cmd[0].endswith("link.exe") or cmd[0].endswith('"link.exe"')
         is_mt = cmd[0].endswith("mt.exe") or cmd[0].endswith('"mt.exe"')
-        _want_assembly_kept = getattr(self, "_want_assembly_kept", False)
         if is_mt:
             # We don't want mt.exe run...
             return
@@ -1291,7 +1205,7 @@ for info in (
     ),
     (
         "win32file",
-        "",
+        "ws2_32 mswsock",
         0x0500,
         """
               win32/src/win32file.i
@@ -1373,7 +1287,6 @@ for info in (
     ("_win32sysloader", "", 0x0501, "win32/src/_win32sysloader.cpp"),
     ("win32transaction", "kernel32", 0x0501, "win32/src/win32transactionmodule.cpp"),
 ):
-
     name, lib_names = info[:2]
     windows_h_ver = sources = None
     if len(info) > 2:
@@ -2208,6 +2121,7 @@ swig_interface_parents = {
 # parser isn't smart enough to differentiate these.
 swig_include_files = "mapilib adsilib".split()
 
+
 # Helper to allow our script specifications to include wildcards.
 def expand_modules(module_dir):
     flist = FileList()
@@ -2325,12 +2239,12 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Python Software Foundation License",
     "Operating System :: Microsoft :: Windows",
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 
@@ -2411,6 +2325,7 @@ dist = setup(
     )
     + convert_data_files(
         [
+            "Pythonwin/start_pythonwin.pyw",
             "pythonwin/pywin/*.cfg",
             "pythonwin/pywin/Demos/*.py",
             "pythonwin/pywin/Demos/app/*.py",
@@ -2498,10 +2413,20 @@ if "build_ext" in dist.command_obj:
     if "build_ext" in dist.command_obj:
         excluded_extensions = dist.command_obj["build_ext"].excluded_extensions
         if excluded_extensions:
+            skip_whitelist = {"exchdapi", "exchange", "axdebug", "winxpgui"}
+            skipped_ex = []
             print("*** NOTE: The following extensions were NOT %s:" % what_string)
             for ext, why in excluded_extensions:
                 print(" %s: %s" % (ext.name, why))
+                if ext.name not in skip_whitelist:
+                    skipped_ex.append(ext.name)
             print("For more details on installing the correct libraries and headers,")
             print("please execute this script with no arguments (or see the docstring)")
+            if skipped_ex:
+                print(
+                    "*** Non-zero exit status. Missing for complete release build: %s"
+                    % skipped_ex
+                )
+                sys.exit(1000 + len(skipped_ex))
         else:
             print("All extension modules %s OK" % (what_string,))

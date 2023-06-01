@@ -1,8 +1,8 @@
-import win32ui
-import win32con
-import win32api
 import commctrl
 import pythoncom
+import win32api
+import win32con
+import win32ui
 from pywin.mfc import dialog
 
 
@@ -273,8 +273,7 @@ if __name__ == "__main__":
     except:
         pass
     dlg = TypeBrowseDialog(fname)
-    try:
-        win32api.GetConsoleTitle()
+    if win32api.GetConsoleTitle():  # empty string w/o console
         dlg.DoModal()
-    except:
+    else:
         dlg.CreateWindow(win32ui.GetMainFrame())

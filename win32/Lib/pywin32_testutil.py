@@ -1,21 +1,15 @@
 # Utilities for the pywin32 tests
+import gc
+import os
 import site
 import sys
-import os
 import unittest
-import gc
+
 import winerror
 
 ##
 ## General purpose utilities for the test suite.
 ##
-
-# The test suite has lots of string constants containing binary data, but
-# the strings are used in various "bytes" contexts.
-def str2bytes(sval):
-    if sys.version_info < (3, 0) and isinstance(sval, str):
-        sval = sval.decode("latin1")
-    return sval.encode("latin1")
 
 
 # Sometimes we want to pass a string that should explicitly be treated as
@@ -38,6 +32,7 @@ def ob2memory(ob):
 ##
 ## unittest related stuff
 ##
+
 
 # This is a specialized TestCase adaptor which wraps a real test.
 class LeakTestCase(unittest.TestCase):
@@ -66,7 +61,7 @@ class LeakTestCase(unittest.TestCase):
     def __call__(self, result=None):
         # For the COM suite's sake, always ensure we don't leak
         # gateways/interfaces
-        from pythoncom import _GetInterfaceCount, _GetGatewayCount
+        from pythoncom import _GetGatewayCount, _GetInterfaceCount
 
         gc.collect()
         ni = _GetInterfaceCount()
@@ -182,8 +177,8 @@ _is_admin = None
 def check_is_admin():
     global _is_admin
     if _is_admin is None:
-        from win32com.shell.shell import IsUserAnAdmin
         import pythoncom
+        from win32com.shell.shell import IsUserAnAdmin
 
         try:
             _is_admin = IsUserAnAdmin()
@@ -238,6 +233,7 @@ try:
     TextTestResult = unittest._TextTestResult
 except AttributeError:
     TextTestResult = unittest.TextTestResult
+
 
 # The 'TestResult' subclass that records the failures and has the special
 # handling for the TestSkipped exception.

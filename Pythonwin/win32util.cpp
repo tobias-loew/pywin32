@@ -436,7 +436,7 @@ BOOL PyWinObject_AsLV_ITEM(PyObject *args, LV_ITEM *pItem)
     if (len < 7)
         return TRUE;
     ob = PyTuple_GET_ITEM(args, 6);
-    if (!PyWinObject_AsPARAM(ob, &pItem->lParam)) {
+    if (!PyWinObject_AsSimplePARAM(ob, &pItem->lParam)) {
         PyWinObject_FreeLV_ITEM(pItem);
         return FALSE;
     }
@@ -740,7 +740,7 @@ BOOL PyWinObject_AsTV_ITEM(PyObject *args, TV_ITEM *pItem)
     ob = PyTuple_GET_ITEM(args, 7);
     if (ob != Py_None) {
         // @tupleitem 7|int|lParam|User defined integer param.
-        if (!PyWinObject_AsPARAM(ob, &pItem->lParam)) {
+        if (!PyWinObject_AsSimplePARAM(ob, &pItem->lParam)) {
             PyWinObject_FreeTV_ITEM(pItem);
             return FALSE;
         }
@@ -1137,8 +1137,8 @@ CString GetReprText(PyObject *objectUse)
     PyObject *s;
     CString csRet;
     s = PyObject_Str(objectUse);
-    if (s) {
-        csRet = CString(PyUnicode_AsUnicode(s));
+    if (s) if (TmpWCHAR ts=s) {
+        csRet = CString(ts);
         Py_DECREF(s);
         return csRet;
     }
@@ -1152,7 +1152,12 @@ CString GetReprText(PyObject *objectUse)
 
     // repr() should always return a unicode string, but for hysterical raisens we check if it is bytes.
     if (PyUnicode_Check(s))
-        csRet = CString(PyUnicode_AS_UNICODE(s));
+        if (TmpWCHAR ts=s)
+            csRet = ts;
+        else {
+            PyErr_Clear();
+            csRet = L"??? wide string allocation error ???";
+        }
     else if (PyBytes_Check(s))
         csRet = CString(PyBytes_AS_STRING(s));
     else

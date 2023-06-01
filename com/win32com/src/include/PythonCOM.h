@@ -276,7 +276,7 @@ PYCOM_EXPORT BOOL PyCom_PyObjectAsSTATSTG(PyObject *ob, STATSTG *pStat, DWORD fl
 PYCOM_EXPORT BOOL PyCom_SAFEARRAYFromPyObject(PyObject *obj, SAFEARRAY **ppSA, VARENUM vt = VT_VARIANT);
 PYCOM_EXPORT PyObject *PyCom_PyObjectFromSAFEARRAY(SAFEARRAY *psa, VARENUM vt = VT_VARIANT);
 #ifndef NO_PYCOM_STGOPTIONS
-PYCOM_EXPORT BOOL PyCom_PyObjectAsSTGOPTIONS(PyObject *obstgoptions, STGOPTIONS **ppstgoptions);
+PYCOM_EXPORT BOOL PyCom_PyObjectAsSTGOPTIONS(PyObject *obstgoptions, STGOPTIONS **ppstgoptions, TmpWCHAR *tmpw_shelve);
 #endif
 PYCOM_EXPORT PyObject *PyCom_PyObjectFromSTATPROPSETSTG(STATPROPSETSTG *pStat);
 PYCOM_EXPORT BOOL PyCom_PyObjectAsSTATPROPSETSTG(PyObject *, STATPROPSETSTG *);
@@ -432,9 +432,9 @@ class PYCOM_EXPORT PyOleNothing : public PyObject {
 // We need to dynamically create C++ Python objects
 // These helpers allow each type object to create it.
 #define MAKE_PYCOM_CTOR(classname) \
-    static PyIUnknown *classname::PyObConstruct(IUnknown *pInitObj) { return new classname(pInitObj); }
+    static PyIUnknown *PyObConstruct(IUnknown *pInitObj) { return new classname(pInitObj); }
 #define MAKE_PYCOM_CTOR_ERRORINFO(classname, iid)                                                       \
-    static PyIUnknown *classname::PyObConstruct(IUnknown *pInitObj) { return new classname(pInitObj); } \
+    static PyIUnknown *PyObConstruct(IUnknown *pInitObj) { return new classname(pInitObj); }            \
     static PyObject *SetPythonCOMError(PyObject *self, HRESULT hr)                                      \
     {                                                                                                   \
         return PyCom_BuildPyException(hr, GetI(self), iid);                                             \

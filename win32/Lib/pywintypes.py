@@ -1,5 +1,8 @@
 # Magic utility that "redirects" to pywintypesxx.dll
-import importlib.util, importlib.machinery, sys, os
+import importlib.machinery
+import importlib.util
+import os
+import sys
 
 
 def __import_pywin32_system_module__(modname, globs):
@@ -87,23 +90,18 @@ def __import_pywin32_system_module__(modname, globs):
         # In a worst-case, it means, say 'python -c "import win32api"'
         # will not work but 'python -c "import pywintypes, win32api"' will,
         # but it's better than nothing.
-        # We prefer the "user" site-packages if it exists...
+
+        # We use the same logic as pywin32_bootstrap to find potential location for the dll
+        # Simply import pywin32_system32 and look in the paths in pywin32_system32.__path__
+
         if found is None:
-            import site
+            import pywin32_system32
 
-            maybe = os.path.join(site.USER_SITE, "pywin32_system32", filename)
-            if os.path.isfile(maybe):
-                found = maybe
-
-        # Or the "global" site-packages.
-        if found is None:
-            import sysconfig
-
-            maybe = os.path.join(
-                sysconfig.get_paths()["platlib"], "pywin32_system32", filename
-            )
-            if os.path.isfile(maybe):
-                found = maybe
+            for path in pywin32_system32.__path__:
+                maybe = os.path.join(path, filename)
+                if os.path.isfile(maybe):
+                    found = maybe
+                    break
 
         if found is None:
             # give up in disgust.

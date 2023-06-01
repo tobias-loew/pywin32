@@ -20,15 +20,13 @@
 #   running this sample you will see an IE Windows briefly appear, but
 #   vanish without ever being repainted.
 
-import sys
-import os
-import win32com.client
-import win32api
-import win32event
+import time
 
 # sys.coinit_flags not set, so pythoncom initializes apartment-threaded.
 import pythoncom
-import time
+import win32api
+import win32com.client
+import win32event
 
 
 class ExplorerEvents:
@@ -48,7 +46,7 @@ class ExplorerEvents:
 
 
 def WaitWhileProcessingMessages(event, timeout=2):
-    start = time.clock()
+    start = time.perf_counter()
     while True:
         # Wake 4 times a second - we can't just specify the
         # full timeout here, as then it would reset for every
@@ -59,7 +57,7 @@ def WaitWhileProcessingMessages(event, timeout=2):
         if rc == win32event.WAIT_OBJECT_0:
             # event signalled - stop now!
             return True
-        if (time.clock() - start) > timeout:
+        if (time.perf_counter() - start) > timeout:
             # Timeout expired.
             return False
         # must be a message.

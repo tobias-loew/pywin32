@@ -3,8 +3,9 @@
 TupleType = tuple
 ListType = list
 IntType = int
-from pywintypes import TimeType
 import pythoncom
+from pywintypes import TimeType
+
 from . import mapi, mapitags
 
 prTable = {}
@@ -33,7 +34,6 @@ def GetPropTagName(pt):
                     mapitags.PROP_TYPE(value) == mapitags.PT_UNICODE
                     or mapitags.PROP_TYPE(value) == mapitags.PT_STRING8
                 ):
-
                     if name[-2:] == "_A" or name[-2:] == "_W":
                         prTable[value] = name
                     else:
@@ -147,7 +147,7 @@ def GetAllProperties(obj, make_tag_names=True):
 _MapiTypeMap = {
     type(0.0): mapitags.PT_DOUBLE,
     type(0): mapitags.PT_I4,
-    type("".encode("ascii")): mapitags.PT_STRING8,  # bytes
+    type(b""): mapitags.PT_STRING8,  # bytes
     type(""): mapitags.PT_UNICODE,  # str
     type(None): mapitags.PT_UNSPECIFIED,
     # In Python 2.2.2, bool isn't a distinct type (type(1==1) is type(0)).

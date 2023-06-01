@@ -1,10 +1,9 @@
 # win32clipboardDemo.py
 #
 # Demo/test of the win32clipboard module.
-from win32clipboard import *
-from pywin32_testutil import str2bytes  # py3k-friendly helper
+
 import win32con
-import types
+from win32clipboard import *
 
 if not __debug__:
     print("WARNING: The test code in this module uses assert")
@@ -32,7 +31,7 @@ def TestText():
     OpenClipboard()
     try:
         text = "Hello from Python"
-        text_bytes = str2bytes(text)
+        text_bytes = text.encode("latin1")
         SetClipboardText(text)
         got = GetClipboardData(win32con.CF_TEXT)
         # CF_TEXT always gives us 'bytes' back .
@@ -54,7 +53,7 @@ def TestText():
         # Unicode tests
         EmptyClipboard()
         text = "Hello from Python unicode"
-        text_bytes = str2bytes(text)
+        text_bytes = text.encode("latin1")
         # Now set the Unicode value
         SetClipboardData(win32con.CF_UNICODETEXT, text)
         # Get it in Unicode.
@@ -68,7 +67,6 @@ def TestText():
 
     OpenClipboard()
     try:
-
         # Make sure I can still get the text as bytes
         got = GetClipboardData(win32con.CF_TEXT)
         assert got == text_bytes, "Didnt get the correct result back - '%r'." % (got,)

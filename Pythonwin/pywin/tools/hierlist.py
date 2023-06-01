@@ -14,13 +14,14 @@
 # to provide maximum flexibility (but with extra work).
 
 import sys
-import win32ui
-import win32con
+
+import commctrl
 import win32api
+import win32con
+import win32ui
+from pywin.mfc import dialog, docview, object, window
 from win32api import RGB
 
-from pywin.mfc import object, window, docview, dialog
-import commctrl
 
 # helper to get the text of an arbitary item
 def GetItemText(item):
@@ -206,9 +207,6 @@ class HierList(object.Object):
             pass
         return ret
 
-    def ItemFromHandle(self, handle):
-        return self.itemHandleMap[handle]
-
     def Refresh(self, hparent=None):
         # Attempt to refresh the given item's sub-entries, but maintain the tree state
         # (ie, the selected item, expanded items, etc)
@@ -272,9 +270,6 @@ class HierList(object.Object):
             return 0
         else:
             return 4
-
-    def GetSelectedBitmapColumn(self, item):
-        return None  # Use standard.
 
     def GetSelectedBitmapColumn(self, item):
         return 0

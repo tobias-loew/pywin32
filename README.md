@@ -12,8 +12,6 @@ This is the readme for the Python for Win32 (pywin32) extensions, which provides
 
 See [CHANGES.txt](https://github.com/mhammond/pywin32/blob/master/CHANGES.txt) for recent notable changes.
 
-Only Python 3 is supported. If you want Python 2 support, you want build `228`.
-
 ## Docs
 
 The docs are a long and sad story, but [there's now an online version](https://mhammond.github.io/pywin32/)
@@ -33,60 +31,82 @@ closed. For such issues, please email the
 note that you must be subscribed to the list before posting.
 
 ## Binaries
-By far the easiest way to use pywin32 is to grab binaries from the [most recent release](https://github.com/mhammond/pywin32/releases)
-
-Note that there are no 32-bit binary installers for 3.10 and later - see
-[this github issue](https://github.com/mhammond/pywin32/issues/1805)
+[Binary releases are deprecated.](https://mhammond.github.io/pywin32_installers.html)
+While they are still provided, [find them here](https://github.com/mhammond/pywin32/releases)
 
 ## Installing via PIP
 
-You can install pywin32 via pip:
-> pip install pywin32
+You should install pywin32 via pip - eg,
+> python -m pip install --upgrade pywin32
 
-If you encounter any problems when upgrading (eg, "module not found" errors or similar), you
-should execute:
+There is a post-install script (see below) which should *not* be run inside virtual environments;
+it should only be run in "global" installs.
+
+For unreleased changes, you can download builds made by [github actions](https://github.com/mhammond/pywin32/actions/) -
+choose any "workflow" from the `main` branch and download its "artifacts")
+
+### Installing globally
+
+Outside of a virtual environment you might want to install COM objects, services, etc. You can do
+this by executing:
 
 > python Scripts/pywin32_postinstall.py -install
 
-This will make some small attempts to cleanup older conflicting installs.
+From the root of your Python installation.
 
-Note that if you want to use pywin32 for "system wide" features, such as
-registering COM objects or implementing Windows Services, then you must run
-that command from an elevated (ie, "Run as Administrator) command prompt.
-
-### `The specified procedure could not be found` / `Entry-point not found` Errors?
-A very common report is that people install pywin32, but many imports fail with errors
-similar to the above.
-
-In almost all cases, this tends to mean there are other pywin32 DLLs installed in your system,
-but in a different location than the new ones. This sometimes happens in environments that
-come with pywin32 pre-shipped (eg, anaconda?).
-
-The possible solutions are:
-
-* Run the "post_install" script documented above.
-
-* Otherwise, find and remove all other copies of `pywintypesXX.dll` and `pythoncomXX.dll`
-  (where `XX` is the Python version - eg, "39")
+If you do this with normal permissions it will be global for your user (a few files will be
+copied to the root of your Python install and some changes made to HKCU). If you execute this from
+an elevated process, it will be global for the machine (files will be copied to System32, HKLM
+will be changed, etc)
 
 ### Running as a Windows Service
 
-Modern Python installers do not, by default, install Python in a way that is suitable for
-running as a service, particularly for other users.
+To run as a service, you probably want to install pywin32 globally from an elevated
+command prompt - see above.
 
-* Ensure Python is installed in a location where the user running the service has
-  access to the installation and is able to load `pywintypesXX.dll` and `pythonXX.dll`.
+You also need to ensure Python is installed in a location where the user running
+the service has access to the installation and is able to load `pywintypesXX.dll` and `pythonXX.dll`. In particular, the `LocalSystem` account typically will not have access
+to your local `%USER%` directory structure.
 
-* Manually copy `pythonservice.exe` from the `site-packages/win32` directory to
-  the same place as these DLLs.
+## Troubleshooting
+If you encounter any problems when upgrading like the following:
+
+```
+The specified procedure could not be found
+Entry-point not found
+```
+
+It usually means one of 2 things:
+
+* You've upgraded an install where the post-install script has previously run.
+So you should run it again:
+
+    > python Scripts/pywin32_postinstall.py -install
+
+    This will make some small attempts to cleanup older conflicting installs.
+
+* There are other pywin32 DLLs installed in your system,
+but in a different location than the new ones. This sometimes happens in environments that
+come with pywin32 pre-shipped (eg, anaconda?).
+
+    The possible solutions here are:
+
+    * Run the "post_install" script documented above.
+
+    * Otherwise, find and remove all other copies of `pywintypesXX.dll` and `pythoncomXX.dll`
+  (where `XX` is the Python version - eg, "39")
 
 ## Building from source
 
-Building from source has been simplified recently - you just need Visual Studio
-and the Windows 10 SDK installed (the free compilers probably work too, but
-haven't been tested - let me know your experiences!)
+Install Visual Studio 2019 (later probably works, but options might be different),
+select "Desktop Development with C++", then the following options:
+* Windows 10 SDK (latest offered I guess? At time of writing, 10.0.18362)
+* "C++ for MFC for ..."
+* ARM build tools if necessary.
 
-`setup.py` is a standard distutils build script.  You probably want:
+(the free compilers probably work too, but haven't been tested - let me know your experiences!)
+
+`setup.py` is a standard distutils build script, so you probably want:
 
 > python setup.py install
 
@@ -94,10 +114,8 @@ or
 
 > python setup.py --help
 
-You can run `setup.py` without any arguments to see
-specific information about dependencies.  A vanilla MSVC installation should
-be able to build most extensions and list any extensions that could not be
-built due to missing libraries - if the build actually fails with your
+Some modules need obscure SDKs to build - `setup.py` should succeed, gracefully
+telling you why it failed to build them - if the build actually fails with your
 configuration, please [open an issue](https://github.com/mhammond/pywin32/issues).
 
 ## Release process
@@ -105,14 +123,15 @@ configuration, please [open an issue](https://github.com/mhammond/pywin32/issues
 The following steps are performed when making a new release - this is mainly
 to form a checklist so mhammond doesn't forget what to do :)
 
-* Ensure CHANGES.txt has everything worth noting, commit it.
+* Ensure CHANGES.txt has everything worth noting. Update the header to reflect
+  the about-to-be released build and date, commit it.
 
 * Update setup.py with the new build number.
 
-* Execute build.bat, wait forever, test the artifacts.
+* Execute `make.bat`, wait forever, test the artifacts.
 
 * Upload .whl artifacts to pypi - we do this before pushing the tag because they might be
-  rejected for an invalid `README.md`. Done via `py -3.5 -m twine upload dist/*XXX*.whl`.
+  rejected for an invalid `README.md`. Done via `py -3.? -m twine upload dist/*XXX*.whl`.
 
 * Commit setup.py (so the new build number is in the repo), create a new git tag
 

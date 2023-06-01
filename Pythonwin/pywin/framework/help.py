@@ -1,11 +1,10 @@
 # help.py - help utilities for PythonWin.
+import os
+
+import regutil
 import win32api
 import win32con
 import win32ui
-import string
-import sys
-import regutil
-import string, os
 
 htmlhelp_handle = None
 
@@ -79,7 +78,6 @@ def ListAllHelpFiles():
 
 def _ListAllHelpFilesInRoot(root):
     """Returns a list of (helpDesc, helpFname) for all registered help files"""
-    import regutil
 
     retList = []
     try:

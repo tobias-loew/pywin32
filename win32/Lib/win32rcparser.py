@@ -10,10 +10,14 @@ dialogs and other Windows UI resources.
 __author__ = "Adam Walker"
 __version__ = "0.11"
 
-import sys, os, shlex, stat
+import os
 import pprint
-import win32con
+import shlex
+import stat
+import sys
+
 import commctrl
+import win32con
 
 _controlMap = {
     "DEFPUSHBUTTON": 0x80,
@@ -651,8 +655,6 @@ if __name__ == "__main__":
         print("See test_win32rcparser.py, and the win32rcparser directory (both")
         print("in the test suite) for an example of this module's usage.")
     else:
-        import pprint
-
         filename = sys.argv[1]
         if "-v" in sys.argv:
             RCParser.debugEnabled = 1

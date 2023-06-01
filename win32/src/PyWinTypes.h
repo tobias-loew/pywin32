@@ -113,6 +113,28 @@ PYWINTYPES_EXPORT PyObject *PyWin_SetAPIError(char *fnName, long err = 0);
 extern PYWINTYPES_EXPORT PyObject *PyWinExc_COMError;
 PYWINTYPES_EXPORT PyObject *PyWin_SetBasicCOMError(HRESULT hr);
 
+// *************
+// strings, which are a bit of a mess!
+//
+// This has gone from 2.x ascii-only, to 2.x+3.x ascii-or-unicode, to 3.x unicode-only,
+// - this baggage means some strange APIs which convert to and from "char *" in various ways.
+//
+// A sizes/lengths are reported as a `DWORD` rather than a `Py_ssize_t`, that's what the callers
+// need. `Py_ssize_t` used as the "in" type.
+// (We also use this for UINT and ULONG, all of which are 32bit unsigned ints.)
+
+// Sometimes we need to downcast from a ssize_t to a DWORD
+inline bool PyWin_is_ssize_dword(Py_ssize_t val) {
+    return val <= MAXDWORD;
+}
+
+#define PYWIN_CHECK_SSIZE_DWORD(val, failResult) \
+    if (!PyWin_is_ssize_dword(val)) { \
+        PyErr_SetString(PyExc_ValueError, "value is larger than a DWORD"); \
+        return failResult; \
+    }
+
+// Almost all of these are roughly identical! But start with BSTR
 // Given a PyObject (string, Unicode, etc) create a "BSTR" with the value
 PYWINTYPES_EXPORT BOOL PyWinObject_AsBstr(PyObject *stringObject, BSTR *pResult, BOOL bNoneOK = FALSE,
                                           DWORD *pResultLen = NULL);
@@ -146,60 +168,67 @@ PYWINTYPES_EXPORT void PyWinObject_FreeChars(char *pResult);
 // Automatically freed WCHAR that can be used anywhere WCHAR * is required
 class TmpWCHAR {
    public:
-    WCHAR *tmp;
+    WCHAR *tmp;  // (NULL after conversion error)
+    Py_ssize_t length;  // only set after successful auto-conversion; w/o trailing \0
+    PyObject *u;        // auxiliary slot for u2w()
+
     TmpWCHAR() { tmp = NULL; }
     TmpWCHAR(WCHAR *t) { tmp = t; }
+    TmpWCHAR(PyObject *ob) : tmp(NULL) { *this = ob; }
+    WCHAR *u2w() { return *this = u; }
+    WCHAR *operator=(PyObject *ob) {
+        if (tmp)
+            PyMem_Free(tmp);
+        if (ob == NULL)
+            tmp = NULL;  // (exception already has been set in this case)
+        else
+            tmp = PyUnicode_AsWideCharString(ob, &length);
+        return tmp;
+    }
     WCHAR *operator=(WCHAR *t)
     {
-        PyWinObject_FreeWCHAR(tmp);
+        if (tmp)
+            PyMem_Free(tmp);
         tmp = t;
         return t;
     }
     WCHAR **operator&() { return &tmp; }
     boolean operator==(WCHAR *t) { return tmp == t; }
     operator WCHAR *() { return tmp; }
-    ~TmpWCHAR() { PyWinObject_FreeWCHAR(tmp); }
+    ~TmpWCHAR() { if (tmp) PyMem_Free(tmp); }
+   private:
+    // Block unwanted copy construction
+    TmpWCHAR(const TmpWCHAR& o);  // = delete;
+    const TmpWCHAR& operator=(const TmpWCHAR& o);  // = delete;
 };
 
-// replacement for PyWinObject_AsReadBuffer and PyWinObject_AsWriteBuffer
-class PYWINTYPES_EXPORT PyWinBufferView
-{
-public:
-    PyWinBufferView();
-    PyWinBufferView(PyObject *ob, bool bWrite = false, bool bNoneOk = false);
-    ~PyWinBufferView();
-    bool init(PyObject *ob, bool bWrite = false, bool bNoneOk = false);
-    void release();
-    bool ok();
-    void* ptr();
-    DWORD len();
-private:
-    Py_buffer m_view;
-
-    // don't copy objects and don't use C++ >= 11 -> not implemented private
-    // copy ctor and assignment operator
-    PyWinBufferView(const PyWinBufferView& src);
-    PyWinBufferView& operator=(PyWinBufferView const &);
-};
-
-/* ANSI/Unicode Support */
-/* If UNICODE defined, will be a BSTR - otherwise a char *
-   Either way - PyWinObject_FreeTCHAR() must be called
-*/
-
-// Helpers with py3k in mind: the result object is always a "core string"
-// object; ie, a string in py2k and unicode in py3k.  Mainly to be used for
-// objects that *must* be that type - tp_str slots, __dict__ items, etc. If
-// Python doesn't *insist* the result be this type, consider using a function
-// that always returns a unicode object (ie, most of the "PyWinObject_From*CHAR"
-// functions)
+// More string helpers - how many do we need?
+// A couple which should die or be modernized and have some `char *` vs `wchar_t *` confusion.
 PYWINTYPES_EXPORT PyObject *PyWinCoreString_FromString(const char *str, Py_ssize_t len = (Py_ssize_t)-1);
 PYWINTYPES_EXPORT PyObject *PyWinCoreString_FromString(const WCHAR *str, Py_ssize_t len = (Py_ssize_t)-1);
 
 #define PyWinObject_FromWCHAR PyWinObject_FromOLECHAR
 
+PYWINTYPES_EXPORT PyObject *PyWinObject_FromOLECHAR(const OLECHAR *str);
+PYWINTYPES_EXPORT PyObject *PyWinObject_FromOLECHAR(const OLECHAR *str, Py_ssize_t numChars);
+
+#define PyWinObject_AsTCHAR PyWinObject_AsWCHAR
+#define PyWinObject_FreeTCHAR PyWinObject_FreeWCHAR
+#define PyWinObject_FromTCHAR PyWinObject_FromOLECHAR
+
+// String support for buffers allocated via CoTaskMemAlloc and CoTaskMemFree
+PYWINTYPES_EXPORT BOOL PyWinObject_AsTaskAllocatedWCHAR(PyObject *stringObject, WCHAR **ppResult, BOOL bNoneOK = FALSE);
+PYWINTYPES_EXPORT void PyWinObject_FreeTaskAllocatedWCHAR(WCHAR *str);
+
+// Copy null terminated string with same allocator as PyWinObject_AsWCHAR, etc
+// ? wot?
+PYWINTYPES_EXPORT WCHAR *PyWin_CopyString(const WCHAR *input);
+PYWINTYPES_EXPORT char *PyWin_CopyString(const char *input);
+
+// Some helpers for arrays of strings.
+//
 // Converts a series of consecutive null terminated strings into a list
-// ??? really?
+// ??? wot?
 PYWINTYPES_EXPORT PyObject *PyWinObject_FromMultipleString(WCHAR *multistring);
 PYWINTYPES_EXPORT PyObject *PyWinObject_FromMultipleString(char *multistring);
 // Converts a sequence of str/unicode objects into a series of consecutive null-terminated
@@ -217,27 +246,36 @@ PYWINTYPES_EXPORT BOOL PyWinObject_AsWCHARArray(PyObject *str_seq, LPWSTR **wcha
 PYWINTYPES_EXPORT void PyWinObject_FreeCharArray(char **pchars, DWORD str_cnt);
 PYWINTYPES_EXPORT BOOL PyWinObject_AsCharArray(PyObject *str_seq, char ***pchars, DWORD *str_cnt, BOOL bNoneOK = FALSE);
 
-PYWINTYPES_EXPORT PyObject *PyWinObject_FromOLECHAR(const OLECHAR *str);
-PYWINTYPES_EXPORT PyObject *PyWinObject_FromOLECHAR(const OLECHAR *str, int numChars);
+// Bytes/Buffer helpers.
+// replacement for PyWinObject_AsReadBuffer and PyWinObject_AsWriteBuffer
+class PYWINTYPES_EXPORT PyWinBufferView
+{
+public:
+    PyWinBufferView() { m_view.obj = NULL; }
+    PyWinBufferView(PyObject *ob, bool bWrite = false, bool bNoneOk = false) {
+        m_view.obj = NULL;
+        init(ob, bWrite, bNoneOk);
+    }
+    ~PyWinBufferView() { release(); }
+    bool init(PyObject *ob, bool bWrite = false, bool bNoneOk = false);
+    void release() {
+        if (m_view.obj != NULL && m_view.obj != Py_None) {
+            PyBuffer_Release(&m_view);  // sets view->obj = NULL
+        }
+    }
+    bool ok() { return m_view.obj != NULL; }
+    void* ptr() { return m_view.buf; }
+    DWORD len() { return static_cast<DWORD>(m_view.len); }
 
-// String support for buffers allocated via a function of your choice.
-PYWINTYPES_EXPORT BOOL PyWinObject_AsPfnAllocatedWCHAR(PyObject *stringObject, void *(*pfnAllocator)(ULONG),
-                                                       WCHAR **ppResult, BOOL bNoneOK = FALSE,
-                                                       DWORD *pResultLen = NULL);
+private:
+    Py_buffer m_view;
 
-#define PyWinObject_AsTCHAR PyWinObject_AsWCHAR
-#define PyWinObject_FreeTCHAR PyWinObject_FreeWCHAR
-#define PyWinObject_FromTCHAR PyWinObject_FromOLECHAR
+    // don't copy objects and don't use C++ >= 11 -> not implemented private
+    // copy ctor and assignment operator
+    PyWinBufferView(const PyWinBufferView& src);
+    PyWinBufferView& operator=(PyWinBufferView const &);
+};
 
-// String support for buffers allocated via CoTaskMemAlloc and CoTaskMemFree
-PYWINTYPES_EXPORT BOOL PyWinObject_AsTaskAllocatedWCHAR(PyObject *stringObject, WCHAR **ppResult, BOOL bNoneOK = FALSE,
-                                                        DWORD *pResultLen = NULL);
-PYWINTYPES_EXPORT void PyWinObject_FreeTaskAllocatedWCHAR(WCHAR *str);
-
-// Copy null terminated string with same allocator as PyWinObject_AsWCHAR, etc
-// ? wot?
-PYWINTYPES_EXPORT WCHAR *PyWin_CopyString(const WCHAR *input);
-PYWINTYPES_EXPORT char *PyWin_CopyString(const char *input);
 
 // For 64-bit python compatibility, convert sequence to tuple and check length fits in a DWORD
 PYWINTYPES_EXPORT PyObject *PyWinSequence_Tuple(PyObject *obseq, DWORD *len);
@@ -354,11 +392,59 @@ PYWINTYPES_EXPORT void PyWinObject_FreeResourceIdA(char *resource_id);
 PYWINTYPES_EXPORT BOOL PyWinObject_AsResourceId(PyObject *ob, WCHAR **presource_id, BOOL bNoneOK = FALSE);
 PYWINTYPES_EXPORT void PyWinObject_FreeResourceId(WCHAR *resource_id);
 
-// WPARAM and LPARAM conversion
-PYWINTYPES_EXPORT BOOL PyWinObject_AsPARAM(PyObject *ob, WPARAM *pparam);
+// WPARAM and LPARAM conversion.
+// Auto-freed WPARAM / LPARAM which ensure any memory referenced remains valid when a String or
+// Buffer object is used. Make sure the destructor is called with the GIL held.
+class PyWin_PARAMHolder {
+  protected:
+    WPARAM _pa;
+    // Holds *either* a PyWinBufferView (which will auto-free) *or* a "void *" that we
+    // will auto-free.
+    void *_pymem;
+    void _free() {
+        if (_pymem) {
+            PyMem_Free(_pymem);
+            _pymem = NULL;
+        }
+    }
+  public:
+    PyWinBufferView bufferView;
+
+    PyWin_PARAMHolder(WPARAM t=0):_pa(t),_pymem(NULL) {}
+    ~PyWin_PARAMHolder() {
+        _free();
+    }
+    WCHAR *set_allocated(WCHAR *t) {
+        assert(!bufferView.ok()); // should be one or the other.
+        _free();
+        _pymem = t;
+        _pa = (WPARAM)t;
+        return t;
+    }
+    // When init_buffer() fails, an appropriate Python error has been set too
+    bool init_buffer(PyObject *ob) {
+        assert(!_pymem); // should be one or the other!
+        _free();
+        if (!bufferView.init(ob)) {
+            return false;
+        }
+        _pa = (WPARAM)bufferView.ptr();
+        return true;
+    }
+
+    WPARAM operator=(WPARAM t) {
+        return _pa = t;
+    }
+    operator WPARAM() { return _pa; }
+    operator LPARAM() { return (LPARAM)_pa; }
+};
+
+PYWINTYPES_EXPORT BOOL PyWinObject_AsPARAM(PyObject *ob, PyWin_PARAMHolder *pparam);
 inline PyObject *PyWinObject_FromPARAM(WPARAM param) { return PyWinObject_FromULONG_PTR(param); }
-inline BOOL PyWinObject_AsPARAM(PyObject *ob, LPARAM *pparam) { return PyWinObject_AsPARAM(ob, (WPARAM *)pparam); }
 inline PyObject *PyWinObject_FromPARAM(LPARAM param) { return PyWinObject_FromULONG_PTR(param); }
+
+PYWINTYPES_EXPORT BOOL PyWinObject_AsSimplePARAM(PyObject *ob, WPARAM *pparam);
+inline BOOL PyWinObject_AsSimplePARAM(PyObject *ob, LPARAM *pparam) { return PyWinObject_AsSimplePARAM(ob, (WPARAM *)pparam); }
 
 // RECT conversions
 // @object PyRECT|Tuple of 4 ints defining a rectangle: (left, top, right, bottom)

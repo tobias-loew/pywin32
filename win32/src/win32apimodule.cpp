@@ -1183,11 +1183,11 @@ static PyObject *PyLoadCursor(PyObject *self, PyObject *args)
 // @pymethod [string]|win32api|CommandLineToArgv|Parses a command line string and returns a list of command line arguments, in a way that is similar to sys.argv.
 static PyObject *PyCommandLineToArgv(PyObject *self, PyObject *args)
 {
-    const Py_UNICODE *cmdLine;
-    if (!PyArg_ParseTuple(args, "u", &cmdLine)) // @pyparm string|cmdLine||A string that contains the full command line. If this parameter is an empty string the function returns the path to the current executable file.
+    TmpWCHAR cmd;
+    if (!PyArg_ParseTuple(args, "U", &cmd.u) || !cmd.u2w()) // @pyparm string|cmdLine||A string that contains the full command line. If this parameter is an empty string the function returns the path to the current executable file.
         return NULL;
     int numArgs = 0;
-    LPWSTR *szArglist = CommandLineToArgvW(cmdLine, &numArgs);
+    LPWSTR *szArglist = CommandLineToArgvW(cmd, &numArgs);
     if (szArglist == NULL)
         ReturnAPIError("CommandLineToArgvW");
 
@@ -1396,13 +1396,14 @@ static PyObject *PyVkKeyScan(PyObject *self, PyObject *args)
         PyW32_END_ALLOW_THREADS
     }
     else if (PyUnicode_Check(obkey)) {
-        if (PyUnicode_GET_SIZE(obkey) != 1) {
+        if (PyUnicode_GetLength(obkey) != 1) {
             PyErr_SetString(PyExc_TypeError, "must be a unicode string of length 1");
             return NULL;
         }
+        TmpWCHAR ts(obkey);  if (!ts) return NULL;
         PyW32_BEGIN_ALLOW_THREADS
             // @pyseeapi VkKeyScanW
-            ret = VkKeyScanW(PyUnicode_AS_UNICODE(obkey)[0]);
+            ret = VkKeyScanW(ts[0]);
         PyW32_END_ALLOW_THREADS
     }
     else {
@@ -1440,13 +1441,14 @@ static PyObject *PyVkKeyScanEx(PyObject *self, PyObject *args)
         PyW32_END_ALLOW_THREADS
     }
     else if (PyUnicode_Check(obkey)) {
-        if (PyUnicode_GET_SIZE(obkey) != 1) {
+        if (PyUnicode_GetLength(obkey) != 1) {
             PyErr_SetString(PyExc_TypeError, "must be a unicode string of length 1");
             return NULL;
         }
+        TmpWCHAR ts(obkey);  if (!ts) return NULL;
         PyW32_BEGIN_ALLOW_THREADS
             // @pyseeapi VkKeyScanExW
-            ret = VkKeyScanExW(PyUnicode_AS_UNICODE(obkey)[0], hkl);
+            ret = VkKeyScanExW(ts[0], hkl);
         PyW32_END_ALLOW_THREADS
     }
     else {
@@ -1543,7 +1545,7 @@ static PyObject *PyGetModuleFileNameW(PyObject *self, PyObject *args)
             break;
         }
         if (reqdsize < bufsize) {
-            ret = PyUnicode_FromUnicode(buf, reqdsize);
+            ret = PyUnicode_FromWideChar(buf, reqdsize);
             break;
         }
         reqdsize++;
@@ -1915,7 +1917,7 @@ static PyObject *PyGetProfileSection(PyObject *self, PyObject *args)
         DWORD retVal = 0;
         while (TRUE) {
             if (szRetBuf) {
-                delete szRetBuf;
+                delete[] szRetBuf;
                 size *= 2;
             }
             szRetBuf = new TCHAR[size]; /* cant fail - may raise exception */
@@ -1936,7 +1938,7 @@ static PyObject *PyGetProfileSection(PyObject *self, PyObject *args)
     PyWinObject_FreeTCHAR(szSection);
     PyWinObject_FreeTCHAR(iniName);
     if (szRetBuf)
-        delete szRetBuf;
+        delete[] szRetBuf;
     return ret;
     // @rdesc The return value is a list of strings.
 }
@@ -2099,21 +2101,13 @@ static PyObject *PyGetLongPathNameW(PyObject *self, PyObject *args)
         else {
             // retry with a buffer that is big enough.  Now we know the
             // size and that it is big, avoid double-handling.
-            Py_UNICODE *buf;
+            TmpWCHAR buf = PyMem_New(WCHAR, length);
             // The length is the buffer needed, which includes the NULL.
-            // PyUnicode_FromUnicode adds one.
-            obLongPathNameW = PyUnicode_FromUnicode(NULL, length - 1);
-            if (!obLongPathNameW) {
-                PyWinObject_FreeWCHAR(fileName);
-                return NULL;
-            }
-            buf = PyUnicode_AS_UNICODE(obLongPathNameW);
+            // PyUnicode_FromWideChar adds one.
             PyW32_BEGIN_ALLOW_THREADS DWORD length2 = (*pfnGetLongPathNameW)(fileName, buf, length);
-            PyW32_END_ALLOW_THREADS if (length2 == 0)
-            {
-                Py_DECREF(obLongPathNameW);
-                obLongPathNameW = NULL;
-            }
+            PyW32_END_ALLOW_THREADS 
+            if (length2)
+                obLongPathNameW = PyUnicode_FromWideChar(buf, -1);
             // On success, it is the number of chars copied *not* including
             // the NULL.  Check this is true.
             assert(length2 + 1 == length);
@@ -2125,15 +2119,16 @@ static PyObject *PyGetLongPathNameW(PyObject *self, PyObject *args)
     return obLongPathNameW;
 }
 
-// @pymethod int|win32api|GetTickCount|Returns the number of milliseconds since windows started.
+// @pymethod int|win32api|GetTickCount|Returns the (64bit) number of milliseconds since windows started. Uses Win API GetTickCount64().
 static PyObject *PyGetTickCount(PyObject *self, PyObject *args)
 {
     if (!PyArg_ParseTuple(args, ":PyGetTickCount"))
         return NULL;
-    PyW32_BEGIN_ALLOW_THREADS DWORD count = GetTickCount();
+    PyW32_BEGIN_ALLOW_THREADS
+    ULONGLONG count = GetTickCount64();
     PyW32_END_ALLOW_THREADS
 
-        return Py_BuildValue("l", (long)count);
+        return Py_BuildValue("K", count);
 }
 
 // @pymethod string|win32api|GetTempPath|Retrieves the path of the directory designated for temporary files.
@@ -2692,8 +2687,8 @@ PyObject *PyPostMessage(PyObject *self, PyObject *args)
     HWND hwnd;
     PyObject *obhwnd, *obwParam = Py_None, *oblParam = Py_None;
     UINT message;
-    WPARAM wParam = 0;
-    LPARAM lParam = 0;
+    PyWin_PARAMHolder wParam = 0;
+    PyWin_PARAMHolder lParam = 0;
     if (!PyArg_ParseTuple(args, "OI|OO:PostMessage",
                           &obhwnd,     // @pyparm <o PyHANDLE>|hwnd||The hWnd of the window to receive the message.
                           &message,    // @pyparm int|idMessage||The ID of the message to post.
@@ -2704,11 +2699,13 @@ PyObject *PyPostMessage(PyObject *self, PyObject *args)
         return NULL;
     if (!PyWinObject_AsPARAM(obwParam, &wParam))
         return NULL;
-    if (!PyWinObject_AsPARAM(oblParam, (WPARAM *)&lParam))
+    if (!PyWinObject_AsPARAM(oblParam, &lParam))
         return NULL;
     // @pyseeapi PostMessage
-    PyW32_BEGIN_ALLOW_THREADS BOOL ok = ::PostMessage(hwnd, message, wParam, lParam);
-    PyW32_END_ALLOW_THREADS if (!ok) return ReturnAPIError("PostMessage");
+    PyW32_BEGIN_ALLOW_THREADS;
+    BOOL ok = ::PostMessage(hwnd, message, wParam, lParam);
+    PyW32_END_ALLOW_THREADS;
+    if (!ok) return ReturnAPIError("PostMessage");
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -2718,8 +2715,8 @@ PyObject *PyPostThreadMessage(PyObject *self, PyObject *args)
 {
     DWORD threadId;
     UINT message;
-    WPARAM wParam = 0;
-    LPARAM lParam = 0;
+    PyWin_PARAMHolder wParam = 0;
+    PyWin_PARAMHolder lParam = 0;
     PyObject *obwParam = Py_None, *oblParam = Py_None;
     if (!PyArg_ParseTuple(args, "iI|OO:PostThreadMessage",
                           &threadId,   // @pyparm int|tid||Identifier of the thread to which the message will be posted.
@@ -2729,12 +2726,14 @@ PyObject *PyPostThreadMessage(PyObject *self, PyObject *args)
         return NULL;
     if (!PyWinObject_AsPARAM(obwParam, &wParam))
         return NULL;
-    if (!PyWinObject_AsPARAM(oblParam, (WPARAM *)&lParam))
+    if (!PyWinObject_AsPARAM(oblParam, &lParam))
         return NULL;
 
     // @pyseeapi PostThreadMessage
-    PyW32_BEGIN_ALLOW_THREADS BOOL ok = ::PostThreadMessage(threadId, message, wParam, lParam);
-    PyW32_END_ALLOW_THREADS if (!ok) return ReturnAPIError("PostThreadMessage");
+    PyW32_BEGIN_ALLOW_THREADS;
+    BOOL ok = ::PostThreadMessage(threadId, message, wParam, lParam);
+    PyW32_END_ALLOW_THREADS;
+    if (!ok) return ReturnAPIError("PostThreadMessage");
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -4179,8 +4178,8 @@ PyObject *PySendMessage(PyObject *self, PyObject *args)
     HWND hwnd;
     PyObject *obhwnd, *obwParam = Py_None, *oblParam = Py_None;
     UINT message;
-    WPARAM wParam = 0;
-    LPARAM lParam = 0;
+    PyWin_PARAMHolder wParam;
+    PyWin_PARAMHolder lParam;
     if (!PyArg_ParseTuple(args, "OI|OO:SendMessage",
                           &obhwnd,     // @pyparm <o PyHANDLE>|hwnd||The hWnd of the window to receive the message.
                           &message,    // @pyparm int|idMessage||The ID of the message to send.
@@ -4191,12 +4190,14 @@ PyObject *PySendMessage(PyObject *self, PyObject *args)
         return NULL;
     if (!PyWinObject_AsPARAM(obwParam, &wParam))
         return NULL;
-    if (!PyWinObject_AsPARAM(oblParam, (WPARAM *)&lParam))
+    if (!PyWinObject_AsPARAM(oblParam, &lParam))
         return NULL;
     LRESULT rc;
     // @pyseeapi SendMessage
-    PyW32_BEGIN_ALLOW_THREADS rc = ::SendMessage(hwnd, message, wParam, lParam);
-    PyW32_END_ALLOW_THREADS return PyWinLong_FromVoidPtr((void *)rc);
+    PyW32_BEGIN_ALLOW_THREADS;
+    rc = ::SendMessage(hwnd, message, wParam, lParam);
+    PyW32_END_ALLOW_THREADS;
+    return PyWinLong_FromVoidPtr((void *)rc);
 }
 
 // @pymethod |win32api|SetConsoleTitle|Sets the title for the current console.
@@ -5828,6 +5829,31 @@ PyObject *PyGetPwrCapabilities(PyObject *self, PyObject *args)
         "DefaultLowLatencyWake", PyLong_FromLong(spc.DefaultLowLatencyWake));
 }
 
+
+// @pymethod dict|win32api|GetSystemPowerStatus|Retrieves the power status of the system
+// @pyseeapi GetSystemPowerStatus
+// @comm Requires Winxp or later.
+// @rdesc Returns a dict representing a SYSTEM_POWER_STATUS struct
+PyObject* PyGetSystemPowerStatus(PyObject *self, PyObject *args)
+{
+    SYSTEM_POWER_STATUS sps;
+    BOOL res = FALSE;
+    Py_BEGIN_ALLOW_THREADS;
+    res = GetSystemPowerStatus(&sps);
+    Py_END_ALLOW_THREADS;
+    if (!res)
+        return PyWin_SetAPIError("GetSystemPowerStatus");
+    return Py_BuildValue(
+        "{s:h, s:h, s:h, s:B, s:L, s:L}",
+        "ACLineStatus", (sps.ACLineStatus == (BYTE)-1) ? -1 : sps.ACLineStatus,
+        "BatteryFlag", (sps.BatteryFlag == (BYTE)-1) ? -1 : sps.BatteryFlag,
+        "BatteryLifePercent", (sps.BatteryLifePercent == (BYTE)-1) ? -1 : sps.BatteryLifePercent,
+        "SystemStatusFlag", sps.SystemStatusFlag,
+        "BatteryLifeTime", (sps.BatteryLifeTime == (DWORD)-1) ? -1 : (long long)sps.BatteryLifeTime,
+        "BatteryFullLifeTime", (sps.BatteryFullLifeTime == (DWORD)-1) ? -1 : (long long)sps.BatteryFullLifeTime);
+}
+
+
 /* List of functions exported by this module */
 // @module win32api|A module, encapsulating the Windows Win32 API.
 static struct PyMethodDef win32api_functions[] = {
@@ -5995,6 +6021,8 @@ static struct PyMethodDef win32api_functions[] = {
     {"GetNativeSystemInfo", PyGetNativeSystemInfo,
      1},  // @pymeth GetNativeSystemInfo|Retrieves information about the current system for a Wow64 process.
     {"GetSystemMetrics", PyGetSystemMetrics, 1},  // @pymeth GetSystemMetrics|Returns the specified system metrics.
+    {"GetSystemPowerStatus", PyGetSystemPowerStatus,
+     METH_NOARGS},  // @pymeth GetSystemPowerStatus|Retrieves the power status of the system
     {"GetSystemTime", PyGetSystemTime, 1},        // @pymeth GetSystemTime|Returns the current system time.
     {"GetTempFileName", PyGetTempFileName, 1},    // @pymeth GetTempFileName|Creates a temporary file.
     {"GetTempPath", PyGetTempPath, 1},  // @pymeth GetTempPath|Returns the path designated as holding temporary files.

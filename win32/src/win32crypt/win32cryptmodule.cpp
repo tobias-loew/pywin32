@@ -486,7 +486,7 @@ static PyObject *PyCertEnumSystemStore(PyObject *self, PyObject *args, PyObject 
         CertEnumSystemStore(dwFlags, pvSystemStoreLocationPara, ret, CertEnumSystemStoreCallback);
     Py_END_ALLOW_THREADS
 
-        if (!bsuccess)
+    if (!bsuccess)
     {
         Py_DECREF(ret);
         ret = NULL;
@@ -495,10 +495,12 @@ static PyObject *PyCertEnumSystemStore(PyObject *self, PyObject *args, PyObject 
     }
 
     if (pvSystemStoreLocationPara != NULL)
+    {
         if (dwFlags & CERT_SYSTEM_STORE_RELOCATE_FLAG)
             PyWinObject_FreeWCHAR((WCHAR *)cssrp.pwszSystemStore);
         else
             PyWinObject_FreeWCHAR((WCHAR *)pvSystemStoreLocationPara);
+    }
     return ret;
 }
 
@@ -931,7 +933,7 @@ static PyObject *PyCryptEnumKeyIdentifierProperties(PyObject *self, PyObject *ar
             return NULL;
         chb.pbData = (BYTE*)pybuf.ptr();
         chb.cbData = pybuf.len();
-    }        
+    }
     if (!PyWinObject_AsWCHAR(obcomputername, &computername, TRUE))
         return NULL;
 
@@ -1089,20 +1091,21 @@ static PyObject *PyCryptQueryObject(PyObject *self, PyObject *args, PyObject *kw
     }
 
     BOOL bsuccess;
-    Py_BEGIN_ALLOW_THREADS bsuccess =
+    Py_BEGIN_ALLOW_THREADS;
+    bsuccess =
         CryptQueryObject(objecttype, input, contenttype, formattype, flags, &encoding, &contenttypeout, &formattypeout,
                          &hcertstore, &hcryptmsg, (const void **)&context);
-    Py_END_ALLOW_THREADS if (!bsuccess) return PyWin_SetAPIError("CryptQueryObject");
+    Py_END_ALLOW_THREADS;
+    if (!bsuccess) return PyWin_SetAPIError("CryptQueryObject");
 
-    switch (formattypeout) {
+    switch (contenttypeout) {
         case CERT_QUERY_CONTENT_CERT:
         case CERT_QUERY_CONTENT_SERIALIZED_CERT:
             obcontext = PyWinObject_FromCERT_CONTEXT((PCCERT_CONTEXT)context);
             break;
         case CERT_QUERY_CONTENT_CTL:
         case CERT_QUERY_CONTENT_SERIALIZED_CTL:
-            // obcontext=new PyCTL_CONTEXT(context);
-            obcontext = PyLong_FromVoidPtr(context);
+            obcontext = PyWinObject_FromCTL_CONTEXT((PCCTL_CONTEXT)context);
             break;
         case CERT_QUERY_CONTENT_CRL:
         case CERT_QUERY_CONTENT_SERIALIZED_CRL:

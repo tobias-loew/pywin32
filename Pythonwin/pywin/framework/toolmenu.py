@@ -1,11 +1,12 @@
 # toolmenu.py
 
-import win32ui
-import win32con
-import win32api
-from . import app
 import sys
-import string
+
+import win32api
+import win32con
+import win32ui
+
+from . import app
 
 tools = {}
 idPos = 100
@@ -19,7 +20,10 @@ defaultToolMenuItems = [
     ),
     ("Edit Python Path", "from pywin.tools import regedit;regedit.EditRegistry()"),
     ("COM Makepy utility", "from win32com.client import makepy;makepy.main()"),
-    ("COM Browser", "from win32com.client import combrowse;combrowse.main()"),
+    (
+        "COM Browser",
+        "from win32com.client import combrowse;combrowse.main(modal=False)",
+    ),
     (
         "Trace Collector Debugging tool",
         "from pywin.tools import TraceCollector;TraceCollector.MakeOutputWindow()",
@@ -106,8 +110,8 @@ def SetToolsMenu(menu, menuPos=None):
 
 
 def HandleToolCommand(cmd, code):
-    import traceback
     import re
+    import traceback
 
     global tools
     (menuString, pyCmd, desc) = tools[cmd]

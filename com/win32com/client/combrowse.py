@@ -4,7 +4,7 @@
 
   Command Prompt
 
-    Use the command *"python.exe catbrowse.py"*.  This will display
+    Use the command *"python.exe combrowse.py"*.  This will display
     display a fairly small, modal dialog.
 
   Pythonwin
@@ -22,12 +22,14 @@
    work.
 
 """
-import win32con
-import win32api, win32ui
 import sys
+
 import pythoncom
-from win32com.client import util
+import win32api
+import win32con
+import win32ui
 from pywin.tools import browser
+from win32com.client import util
 
 
 class HLIRoot(browser.HLIPythonObject):
@@ -449,7 +451,7 @@ class HLITypeLibFunction(HLICOM):
             typname = self.vartypes[justtyp]
         except KeyError:
             typname = "?Bad type?"
-        for (flag, desc) in self.type_flags:
+        for flag, desc in self.type_flags:
             if flag & typ:
                 typname = "%s(%s)" % (desc, typname)
         return typname
@@ -591,17 +593,15 @@ class HLIHeadingRegisterdTypeLibs(HLICOM):
         return ret
 
 
-def main(modal=False):
+def main(modal=True, mdi=False):
     from pywin.tools import hierlist
 
     root = HLIRoot("COM Browser")
-    if "app" in sys.modules:
-        # do it in a window
+    if mdi and "pywin.framework.app" in sys.modules:
+        # do it in a MDI window
         browser.MakeTemplate()
         browser.template.OpenObject(root)
     else:
-        #               list=hierlist.HierListWithItems( root, win32ui.IDB_BROWSER_HIER )
-        #               dlg=hierlist.HierDialog("COM Browser",list)
         dlg = browser.dynamic_browser(root)
         if modal:
             dlg.DoModal()
@@ -611,7 +611,7 @@ def main(modal=False):
 
 
 if __name__ == "__main__":
-    main()
+    main(modal=win32api.GetConsoleTitle())
 
     ni = pythoncom._GetInterfaceCount()
     ng = pythoncom._GetGatewayCount()

@@ -1,12 +1,11 @@
 # cmdline - command line utilities.
-import sys
-import win32ui
 import string
+import sys
+
+import win32ui
 
 
 def ParseArgs(str):
-    import string
-
     ret = []
     pos = 0
     length = len(str)

@@ -18,7 +18,9 @@ Example:
   the easiest way is often to simply use PerfMon to find out the names.
 """
 
-import win32pdh, time
+import time
+
+import win32pdh
 
 error = win32pdh.error
 
@@ -30,7 +32,8 @@ counter_english_map = {}
 
 def find_pdh_counter_localized_name(english_name, machine_name=None):
     if not counter_english_map:
-        import win32api, win32con
+        import win32api
+        import win32con
 
         counter_reg_value = win32api.RegQueryValueEx(
             win32con.HKEY_PERFORMANCE_DATA, "Counter 009"
@@ -81,7 +84,7 @@ def FindPerformanceAttributesByName(
     machine=None,
     bRefresh=0,
 ):
-    """Find peformance attributes by (case insensitive) instance name.
+    """Find performance attributes by (case insensitive) instance name.
 
     Given a process name, return a list with the requested attributes.
     Most useful for returning a tuple of PIDs given a process name.

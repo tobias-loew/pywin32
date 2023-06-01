@@ -1,6 +1,10 @@
 # Utilities for the demos
 
-import sys, win32api, win32con, win32ui
+import sys
+
+import win32api
+import win32con
+import win32ui
 
 NotScriptMsg = """\
 This demo program is not designed to be run as a Script, but is
@@ -54,8 +58,6 @@ def NeedApp():
         except win32api.error as details:
             win32ui.MessageBox("Error executing command - %s" % (details), "Demos")
 
-
-from pywin.framework.app import HaveGoodGUI
 
 if __name__ == "__main__":
     import demoutils

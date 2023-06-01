@@ -16,10 +16,10 @@
 # Does not regenerate the Visual C++ 6 project files but does the VS .NET
 # project file.
 
+import glob
+import os
 import string
 import sys
-import os
-import glob
 
 # EOL constants
 CR = "\r"
@@ -31,6 +31,7 @@ else:
     # Yes, LF is the native EOL even on Mac OS X. CR is just for
     # Mac OS <=9 (a.k.a. "Mac Classic")
     NATIVE = LF
+
 
 # Automatically generated sections contain start and end comments,
 # a definition line and the results.

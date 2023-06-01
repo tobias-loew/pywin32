@@ -17,23 +17,20 @@
 # Note that it will _always_ prompt you if the file in the editor has been modified.
 
 
-import win32ui
+import re
+
+import regex
 import win32api
 import win32con
-import regex
-import re
-import string
-import sys, os
-import traceback
-from pywin.mfc import docview, dialog, afxres
-
+import win32ui
 from pywin.framework.editor import (
-    GetEditorOption,
-    SetEditorOption,
     GetEditorFontOption,
+    GetEditorOption,
     SetEditorFontOption,
+    SetEditorOption,
     defaultCharacterFormat,
 )
+from pywin.mfc import afxres, dialog, docview
 
 patImport = regex.symcomp("import \(<name>.*\)")
 patIndent = regex.compile("^\\([ \t]*[~ \t]\\)")
@@ -115,23 +112,16 @@ class EditorDocument(ParentEditorDocument):
         f.close()
         contents = self.TranslateLoadedData(raw)
         rc = 0
-        if win32ui.IsWin32s() and len(contents) > 62000:  # give or take a few bytes
-            win32ui.MessageBox(
-                "This file is too big for Python on Windows 3.1\r\nPlease use another editor to view this file."
-            )
-        else:
-            try:
-                self.GetFirstView().SetWindowText(contents)
-                rc = 1
-            except TypeError:  # Null byte in file.
-                win32ui.MessageBox(
-                    "This file contains NULL bytes, and can not be edited"
-                )
-                rc = 0
+        try:
+            self.GetFirstView().SetWindowText(contents)
+            rc = 1
+        except TypeError:  # Null byte in file.
+            win32ui.MessageBox("This file contains NULL bytes, and can not be edited")
+            rc = 0
 
-            self.EndWaitCursor()
-            self.SetModifiedFlag(0)  # No longer dirty
-            self._DocumentStateChanged()
+        self.EndWaitCursor()
+        self.SetModifiedFlag(0)  # No longer dirty
+        self._DocumentStateChanged()
         return rc
 
     def TranslateLoadedData(self, data):
@@ -286,13 +276,13 @@ class EditorView(ParentEditorView):
                 lookLine = startLine - 1
                 while lookLine >= 0:
                     check = self._obj_.GetLine(lookLine)[0:1]
-                    if check in ["\t", " "]:
+                    if check in ("\t", " "):
                         ins = check
                         break
                     lookLine = lookLine - 1
             else:  # See if the previous char can tell us
                 check = line[realCol - 1]
-                if check in ["\t", " "]:
+                if check in ("\t", " "):
                     ins = check
 
         # Either smart tabs off, or not smart enough!

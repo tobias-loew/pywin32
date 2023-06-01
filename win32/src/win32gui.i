@@ -251,7 +251,9 @@ PyObject *PyWinObject_FromHDEVNOTIFY(HGDIOBJ h)
 
 // Written to the module init function.
 %init %{
+#if PY_VERSION_HEX < 0x03070000
 PyEval_InitThreads(); /* Start the interpreter's thread-awareness */
+#endif
 PyDict_SetItemString(d, "dllhandle", PyWinLong_FromVoidPtr(g_dllhandle));
 PyDict_SetItemString(d, "error", PyWinExc_ApiError);
 
@@ -716,7 +718,7 @@ BOOL PyWndProc_Call(PyObject *obFuncOrMap, HWND hWnd, UINT uMsg, WPARAM wParam, 
 	Py_DECREF(args);
 	LRESULT rc = 0;
 	if (ret){
-		if (!PyWinObject_AsPARAM(ret, (LPARAM *)&rc))
+		if (!PyWinObject_AsSimplePARAM(ret, (LPARAM *)&rc))
 			HandleError("WNDPROC return value cannot be converted to LRESULT");
 		Py_DECREF(ret);
 		}
@@ -794,7 +796,7 @@ INT_PTR CALLBACK PyDlgProcHDLG(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		PyObject *obTuple = (PyObject *)lParam;
 		PyObject *obWndProc = PyTuple_GET_ITEM(obTuple, 0);
 		// Replace the lParam with the one the user specified.
-		lParam = 0;
+		PyWin_PARAMHolder lParam;
 		if (PyTuple_GET_ITEM(obTuple, 1) != Py_None)
 			PyWinObject_AsPARAM( PyTuple_GET_ITEM(obTuple, 1), &lParam );
 
@@ -861,6 +863,7 @@ public:
 	static PyObject *PySetDialogProc(PyObject *self, PyObject *args);
 	WNDCLASS m_WNDCLASS;
 	PyObject *m_obMenuName, *m_obClassName, *m_obWndProc;
+	TmpWCHAR m_MenuName, m_ClassName;
 };
 #define PyWNDCLASS_Check(ob)	((ob)->ob_type == &PyWNDCLASSType)
 
@@ -1001,7 +1004,7 @@ PyObject *PyWNDCLASS::getattro(PyObject *self, PyObject *obname)
 	return PyObject_GenericGetAttr(self, obname);
 }
 
-int SetTCHAR(PyObject *v, PyObject **m, LPCTSTR *ret)
+int _SetTCHAR(PyObject *v, PyObject **m, LPCTSTR *ret, TmpWCHAR &tws)
 {
 	if (!PyUnicode_Check(v)) {
 		PyErr_SetString(PyExc_TypeError, "Object must be a Unicode");
@@ -1010,7 +1013,9 @@ int SetTCHAR(PyObject *v, PyObject **m, LPCTSTR *ret)
 	Py_XDECREF(*m);
 	*m = v;
 	Py_INCREF(v);
-	*ret = PyUnicode_AsUnicode(v);
+	*ret = tws = v;
+	if (!tws)
+	    return -1;
 	return 0;
 }
 
@@ -1025,10 +1030,10 @@ int PyWNDCLASS::setattro(PyObject *self, PyObject *obname, PyObject *v)
 		return -1;
 	PyWNDCLASS *pW = (PyWNDCLASS *)self;
 	if (strcmp("lpszMenuName", name)==0) {
-		return SetTCHAR(v, &pW->m_obMenuName, &pW->m_WNDCLASS.lpszMenuName);
+		return _SetTCHAR(v, &pW->m_obMenuName, &pW->m_WNDCLASS.lpszMenuName, pW->m_MenuName);
 	}
 	if (strcmp("lpszClassName", name)==0) {
-		return SetTCHAR(v, &pW->m_obClassName, &pW->m_WNDCLASS.lpszClassName);
+		return _SetTCHAR(v, &pW->m_obClassName, &pW->m_WNDCLASS.lpszClassName, pW->m_ClassName);
 	}
 	if (strcmp("lpfnWndProc", name)==0) {
 		if (!PyCallable_Check(v) && !PyDict_Check(v)) {
@@ -1889,8 +1894,6 @@ static PyObject *PySetWindowLong(PyObject *self, PyObject *args)
 static PyObject *PyCallWindowProc(PyObject *self, PyObject *args)
 {
 	MYWNDPROC wndproc;
-	WPARAM wparam;
-	LPARAM lparam;
 	HWND hwnd;
 	PyObject *obwndproc, *obhwnd, *obwparam, *oblparam;
 	UINT msg;
@@ -1905,9 +1908,11 @@ static PyObject *PyCallWindowProc(PyObject *self, PyObject *args)
 		return NULL;
 	if (!PyWinObject_AsHANDLE(obhwnd, (HANDLE *)&hwnd))
 		return NULL;
+	PyWin_PARAMHolder wparam;
 	if (!PyWinObject_AsPARAM(obwparam, &wparam))
 		return NULL;
-	if (!PyWinObject_AsPARAM(oblparam, (WPARAM *)&lparam))
+	PyWin_PARAMHolder lparam;
+	if (!PyWinObject_AsPARAM(oblparam, &lparam))
 		return NULL;
 	LRESULT rc;
     Py_BEGIN_ALLOW_THREADS
@@ -1918,14 +1923,16 @@ static PyObject *PyCallWindowProc(PyObject *self, PyObject *args)
 %}
 %native (CallWindowProc) PyCallWindowProc;
 
-%typemap(python,in) WPARAM {
-   if (!PyWinObject_AsPARAM($source, &$target))
+%typemap(python,in) WPARAM(PyWin_PARAMHolder wtemp) {
+   if (!PyWinObject_AsPARAM($source, &wtemp))
        return NULL;
+    $target = wtemp;
 }
 
-%typemap(python,in) LPARAM {
-   if (!PyWinObject_AsPARAM($source, (WPARAM *)&$target))
+%typemap(python,in) LPARAM(PyWin_PARAMHolder ltemp) {
+   if (!PyWinObject_AsPARAM($source, &ltemp))
        return NULL;
+    $target = ltemp;
 }
 
 %{
@@ -1943,11 +1950,11 @@ static PyObject *PySendMessage(PyObject *self, PyObject *args)
 		return NULL;
 	if (!PyWinObject_AsHANDLE(obhwnd, (HANDLE *)&hwnd))
 		return NULL;
-	WPARAM wparam;
-	LPARAM lparam;
+	PyWin_PARAMHolder wparam;
+	PyWin_PARAMHolder lparam;
 	if (!PyWinObject_AsPARAM(obwparam, &wparam))
 		return NULL;
-	if (!PyWinObject_AsPARAM(oblparam, (WPARAM *)&lparam))
+	if (!PyWinObject_AsPARAM(oblparam, &lparam))
 		return NULL;
 
 	LRESULT rc;
@@ -1978,11 +1985,11 @@ static PyObject *PySendMessageTimeout(PyObject *self, PyObject *args)
 		return NULL;
 	if (!PyWinObject_AsHANDLE(obhwnd, (HANDLE *)&hwnd))
 		return NULL;
-	WPARAM wparam;
-	LPARAM lparam;
+	PyWin_PARAMHolder wparam;
+	PyWin_PARAMHolder lparam;
 	if (!PyWinObject_AsPARAM(obwparam, &wparam))
 		return NULL;
-	if (!PyWinObject_AsPARAM(oblparam, (WPARAM *)&lparam))
+	if (!PyWinObject_AsPARAM(oblparam, &lparam))
 		return NULL;
 
 	LRESULT rc;
@@ -3019,6 +3026,73 @@ BOOLAPI GetCaretPos(POINT *OUTPUT);
 
 // @pyswig |ShowCaret|Shows the caret at its current position
 BOOLAPI ShowCaret(HWND hWnd);	// @pyparm <o PyHANDLE>|hWnd||Window that owns the caret, can be 0.
+
+%{
+// @pyswig WORD|CascadeWindows|Cascade windows
+static PyObject *PyCascadeWindows(PyObject *self, PyObject *args)
+{
+    PyObject *hwndObject, *rectObject = Py_None, *childrenObject = Py_None;
+    UINT how = 0, childCount = 0;
+    RECT rect, *rectPtr = NULL;
+    HWND hwnd, *children = NULL;
+    WORD res = 0;
+    if (!PyArg_ParseTuple(args, "OI|OO:CascadeWindows",
+        &hwndObject,  //@pyparm <o PyHANDLE>|hwnd||Window handle
+        &how,  //@pyparm int|wHow||Cascade flag (win32con)
+        &rectObject,  //@pyparm <o PyHANDLE>|rect||Rectangle area (can be None)
+        &childrenObject)  //@pyparm <o PyHANDLE>|children||Tuple of child windows (can be None)
+    )
+        return NULL;
+    if (!PyWinObject_AsHANDLE(hwndObject, (HANDLE*)&hwnd))
+        return NULL;
+    // Parse out rectangle object
+    if (rectObject != Py_None) {
+        if (!PyArg_ParseTuple(rectObject, "llll",
+            &rect.left, &rect.top, &rect.right, &rect.bottom)
+        )
+            return NULL;
+        rectPtr = &rect;
+    }
+
+    if (PyTuple_Check(childrenObject)) {
+        childCount = (UINT)(PyTuple_GET_SIZE(childrenObject));
+        if (childCount) {
+            children = (HWND*)(malloc(sizeof(HWND) * childCount));
+            if (!children) {
+                PyErr_NoMemory();
+                return NULL;
+            }
+            for (UINT i = 0; i < childCount; ++i) {
+                if (!PyWinObject_AsHANDLE(PyTuple_GetItem(childrenObject, i), (HANDLE*)(&children[i]))) {
+                    free(children);
+                    return NULL;
+                }
+            }
+        }
+    } else if (childrenObject != Py_None) {
+        PyErr_SetString(PyExc_TypeError, "The child windows object is neither a tuple nor None");
+        return NULL;
+    }
+    Py_BEGIN_ALLOW_THREADS;
+    res = CascadeWindows(hwnd, how, rectPtr, childCount, children);
+    Py_END_ALLOW_THREADS;
+    if (children) {
+        free(children);
+    }
+    if (!res) {
+        DWORD gle = GetLastError();
+        // Only fail if GetLastError() != 0. In theory, there could be cases when function returns 0,
+        //   but it's not a failure (there are no windows to cascade).
+        if (gle) {
+            PyWin_SetAPIError("CascadeWindows", gle);
+            return NULL;
+        }
+    }
+    return PyLong_FromLong(res);
+}
+%}
+%native (CascadeWindows) PyCascadeWindows;
+
 
 // @pyswig boolean|ShowWindow|Shows or hides a window and changes its state
 BOOL ShowWindow(
@@ -5003,9 +5077,11 @@ static PyObject *PyGetPixel(PyObject *self, PyObject *args)
 		return NULL;
 	if (!PyWinObject_AsHANDLE(obdc, (HANDLE *)&hdc))
 		return NULL;
-	ret=GetPixel(hdc, x, y);
-	if (ret==CLR_INVALID)
-		return PyWin_SetAPIError("GetPixel");
+	ret = GetPixel(hdc, x, y);
+	if (ret == CLR_INVALID) {
+		PyErr_SetString(PyWinExc_ApiError, "Could not get pixel value.");
+		return NULL;
+	}
 	return PyLong_FromUnsignedLong(ret);
 }
 
@@ -5817,6 +5893,18 @@ HWND GetWindow(
 	HWND hWnd,  // @pyparm int|hWnd||handle to original window
 	UINT uCmd   // @pyparm int|uCmd||relationship flag
 );
+
+// @pyswig int|GetTopWindow|Examines the Z order of the child windows associated with the specified parent window and retrieves a handle to the child window at the top of the Z order.
+HWND GetTopWindow(
+    HWND hWnd  // @pyparm int|hWnd||handle to parent window
+);
+
+// @pyswig int|GetAncestor|retrieves the handle to the ancestor of the specified window.
+HWND GetAncestor(
+    HWND hWnd,  // @pyparm int|hWnd||handle to original window
+    UINT gaFlags  // @pyparm int|gaFlags||ancestor to be retrieved
+);
+
 // @pyswig int|GetWindowDC|returns the device context (DC) for the entire window, including title bar, menus, and scroll bars.
 HDC GetWindowDC(
 	HWND hWnd   // @pyparm int|hWnd||handle of window
@@ -6252,6 +6340,33 @@ static PyObject *PyCreateDC(PyObject *self, PyObject *args)
 }
 %}
 
+// @pyswig int|ResetDC|Resets a DC
+// @pyparm int|hdc||The source DC
+// @pyparam <o PyDEVMODE>|devmode||Information about the new DC.
+%native (ResetDC) PyResetDC;
+%{
+static PyObject *PyResetDC(PyObject *self, PyObject *args)
+{
+	PDEVMODE pdevmode;
+	PyObject *obdevmode=NULL;
+	HDC hdc;
+	PyObject *obdc=NULL;
+	if (!PyArg_ParseTuple(args, "OO", &obdc, &obdevmode))
+		return NULL;
+	if (!PyWinObject_AsHANDLE(obdc, (HANDLE *)&hdc))
+		return NULL;
+
+	if (!PyWinObject_AsDEVMODE(obdevmode, &pdevmode, FALSE))
+		return NULL;
+	HDC newdc = ResetDC(hdc, pdevmode);
+	if (newdc == NULL) {
+		PyWin_SetAPIError("ResetDC", GetLastError());
+		return NULL;
+	}
+	return PyWinLong_FromHANDLE(newdc);
+}
+%}
+
 %{
 void PyWinObject_FreeOPENFILENAMEW(OPENFILENAMEW *pofn)
 {
@@ -6273,7 +6388,7 @@ BOOL PyParse_OPENFILENAMEW_Args(PyObject *args, PyObject *kwargs, OPENFILENAMEW 
 
 PyObject *PyReturn_OPENFILENAMEW_Output(OPENFILENAMEW *pofn)
 {
-	DWORD filechars, filterchars;
+	Py_ssize_t filechars, filterchars;
 	// If OFN_ALLOWMULTISELECT is set, the terminator is 2 NULLs,
 	// otherwise a single NULL.
 	if (pofn->Flags & OFN_ALLOWMULTISELECT) {
