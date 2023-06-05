@@ -255,7 +255,7 @@ def GenerateFromTypeLibSpec(
     bUnicodeToString=None,
     bForDemand=bForDemandDefault,
     bBuildHidden=1,
-    iCreateEnums=0,
+    iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
     bTypeHints=False,
 ):
     assert bUnicodeToString is None, "this is deprecated and will go away"
@@ -407,7 +407,7 @@ def main():
     verboseLevel = 1
     doit = 1
     bForDemand = bForDemandDefault
-    iCreateEnums = 0
+    iCreateEnums = ENUMS_CREATE_INT_CONSTANTS
     typeHints = 0
 
     try:
