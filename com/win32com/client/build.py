@@ -25,7 +25,6 @@ import pythoncom
 import winerror
 from pywintypes import TimeType
 
-
 # constants for enumeration handling
 ENUMS_CREATE_INT_CONSTANTS = 0x1
 ENUMS_CREATE_ENUM_CLASSES = 0x2
