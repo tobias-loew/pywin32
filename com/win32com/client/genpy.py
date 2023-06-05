@@ -29,6 +29,7 @@ GEN_FULL = "full"
 GEN_DEMAND_BASE = "demand(base)"
 GEN_DEMAND_CHILD = "demand(child)"
 
+
 # This map is used purely for the users benefit -it shows the
 # raw, underlying type of Alias/Enums, etc.  The COM implementation
 # does not use this map at runtime - all Alias/Enum have already
@@ -222,16 +223,13 @@ class EnumerationItem(build.OleItem, WritableItem):
     ##    print >> stream "%s=constants # Compatibility with previous versions." % (enumName)
     ##    WriteAliasesForItem(self, aliasItems)
 
-    def WriteEnumerationItems(self, stream, iCreateEnum=0):
+    def WriteEnumerationItems(self, stream, bCreateEnumClass=False):
         num = 0
         enumName = self.doc[0]
         # Write in name alpha order
         names = list(self.mapVars.keys())
 
-        if iCreateEnum == 1:
-            # do not sort when using class
-            print("class %s(Enum):" % (enumName), file=stream)
-        elif iCreateEnum == 2:
+        if bCreateEnumClass:
             # do not sort when using class
             print("class %s(RelaxedIntEnum):" % (enumName), file=stream)
         else:
@@ -259,7 +257,7 @@ class EnumerationItem(build.OleItem, WritableItem):
                         + '"'
                         + " # This VARIANT type cannot be converted automatically"
                     )
-                if iCreateEnum != 0:
+                if bCreateEnumClass:
                     print(
                         "\t%-30s=%-10s"
                         % (build.MakePublicAttributeName(name, True), use),
@@ -273,8 +271,7 @@ class EnumerationItem(build.OleItem, WritableItem):
                     )
 
                 num += 1
-        if iCreateEnum != 0:
-            # do not sort when using class
+        if bCreateEnumClass:
             print("", file=stream)
 
         return num
@@ -339,7 +336,9 @@ class VTableItem(build.VTableItem, WritableItem):
 class DispatchItem(build.DispatchItem, WritableItem):
     order = 3
 
-    def __init__(self, typeinfo, attr, doc=None, iCreateEnums=0):
+    def __init__(
+        self, typeinfo, attr, doc=None, iCreateEnums=build.ENUMS_CREATE_INT_CONSTANTS
+    ):
         build.DispatchItem.__init__(
             self, typeinfo, attr, doc, iCreateEnums=iCreateEnums
         )
@@ -558,9 +557,8 @@ class DispatchItem(build.DispatchItem, WritableItem):
                 lkey = key.lower()
                 details = entry.desc
                 if (
-                    generator.iCreateEnums != 0
-                    and details[8][5] == pythoncom.TKIND_ENUM
-                ):
+                    generator.iCreateEnums & build.ENUMS_CREATE_ENUM_CLASSES
+                ) != 0 and details[8][5] == pythoncom.TKIND_ENUM:
                     resultCLSID = "(%s,%d)" % (
                         entry.GetResultName(),
                         details[8][0] & 0x2000,
@@ -624,9 +622,8 @@ class DispatchItem(build.DispatchItem, WritableItem):
                 argDesc = details[2]
                 resultDesc = details[8]
                 if (
-                    generator.iCreateEnums != 0
-                    and details[8][5] == pythoncom.TKIND_ENUM
-                ):
+                    generator.iCreateEnums & build.ENUMS_CREATE_ENUM_CLASSES
+                ) != 0 and details[8][5] == pythoncom.TKIND_ENUM:
                     resultCLSID = "(%s,%d)" % (
                         entry.GetResultName(),
                         details[8][0] & 0x2000,
@@ -950,7 +947,7 @@ class Generator:
         progressObject,
         bBuildHidden=1,
         bUnicodeToString=None,
-        iCreateEnums=0,
+        iCreateEnums=build.ENUMS_CREATE_INT_CONSTANTS,
         bTypeHints=False,
     ):
         assert bUnicodeToString is None, "this is deprecated and will go away"
@@ -1230,9 +1227,7 @@ class Generator:
             "import win32com.client.CLSIDToClass, pythoncom, pywintypes", file=self.file
         )
         print("import win32com.client.util", file=self.file)
-        if self.iCreateEnums == 1:
-            print("from enum import Enum", file=self.file)
-        elif self.iCreateEnums == 2:
+        if (self.iCreateEnums & build.ENUMS_CREATE_ENUM_CLASSES) != 0:
             print(
                 "from win32com.client.RelaxedIntEnum import RelaxedIntEnum",
                 file=self.file,
@@ -1282,20 +1277,29 @@ class Generator:
 
         # Generate the constants and their support.
         if enumItems:
-            if self.iCreateEnums == 0:
+            if (self.iCreateEnums & build.ENUMS_CREATE_INT_CONSTANTS) != 0:
                 print("class constants:", file=stream)
 
-            items = list(enumItems.values())
-            items.sort()
-            num_written = 0
-            for oleitem in items:
-                num_written += oleitem.WriteEnumerationItems(stream, self.iCreateEnums)
-                self.progress.Tick()
-            if self.iCreateEnums == 0:
+                items = list(enumItems.values())
+                items.sort()
+                num_written = 0
+                for oleitem in items:
+                    num_written += oleitem.WriteEnumerationItems(stream, False)
+                    self.progress.Tick()
                 if not num_written:
                     print("\tpass", file=stream)
 
-            print(file=stream)
+                print(file=stream)
+
+            if (self.iCreateEnums & build.ENUMS_CREATE_ENUM_CLASSES) != 0:
+                items = list(enumItems.values())
+                items.sort()
+                num_written = 0
+                for oleitem in items:
+                    num_written += oleitem.WriteEnumerationItems(stream, True)
+                    self.progress.Tick()
+
+                print(file=stream)
 
         if self.generate_type == GEN_FULL:
             items = [l for l in oleItems.values() if l is not None]
@@ -1382,7 +1386,7 @@ class Generator:
         print("}", file=stream)
         print(file=stream)
 
-        if enumItems and self.iCreateEnums == 0:
+        if enumItems and (self.iCreateEnums & build.ENUMS_CREATE_INT_CONSTANTS) != 0:
             print(
                 "win32com.client.constants.__dicts__.append(constants.__dict__)",
                 file=stream,

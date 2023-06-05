@@ -24,7 +24,7 @@ usageHelp = """ \
 
 Usage:
 
-  makepy.py [-i] [-v|q] [-h] [-u] [-e] [-t] [-o output_file] [-d] [typelib, ...]
+  makepy.py [-i] [-v|q] [-h] [-u] [-e (constants,classes)] [-t] [-o output_file] [-d] [typelib, ...]
 
   -i    -- Show information for the specified typelib.
 
@@ -47,8 +47,12 @@ Usage:
   -d    -- Generate the base code now and the class code on demand.
            Recommended for large type libraries.
 
-  -e    -- Generate IntEnum classes (instead of int constants) for enumerations in the typelib (requires at least version 3.4)
-           
+  -e    -- Processing of enumerations in the typelib. Possible arguments 
+           (multiple arguments can be specified as comma separated list)
+           constants: generate int constants for enumeration entries
+           classes: generate enum classes (requires at least version 3.4)
+           NOTE: if -e is not specified then int constants are generated
+          
   -t    -- Generate type hints  (requires at least version 3.7)
            
   typelib -- A TLB, DLL, OCX or anything containing COM type information.
@@ -75,6 +79,7 @@ import os
 import sys
 
 import pythoncom
+from win32com.client.build import ENUMS_CREATE_INT_CONSTANTS, ENUMS_CREATE_ENUM_CLASSES
 from win32com.client import Dispatch, gencache, genpy, selecttlb
 
 bForDemandDefault = 0  # Default value of bForDemand - toggle this to change the world - see also gencache.py
@@ -402,11 +407,11 @@ def main():
     verboseLevel = 1
     doit = 1
     bForDemand = bForDemandDefault
-    createEnums = 0
+    iCreateEnums = 0
     typeHints = 0
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqdte")
+        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqdte:")
         for o, v in opts:
             if o == "-h":
                 hiddenSpec = 0
@@ -426,11 +431,21 @@ def main():
             elif o == "-d":
                 bForDemand = not bForDemand
             elif o == "-e":
-                createEnums = 2
+                iCreateEnums = 0
+                if type(v) == str:
+                    enume_args = v.split(",")
+                    for enume_arg in enume_args:
+                        if enume_arg == "constants":
+                            iCreateEnums |= ENUMS_CREATE_INT_CONSTANTS
+                        elif enume_arg == "classes":
+                            iCreateEnums |= ENUMS_CREATE_ENUM_CLASSES
+                if iCreateEnums == 0:
+                    iCreateEnums = ENUMS_CREATE_INT_CONSTANTS
+
             elif o == "-t":
                 typeHints = True
 
-    except (getopt.error) as msg:
+    except getopt.error as msg:
         sys.stderr.write(str(msg) + "\n")
         usage()
 
@@ -466,7 +481,7 @@ def main():
             verboseLevel=verboseLevel,
             bForDemand=bForDemand,
             bBuildHidden=hiddenSpec,
-            iCreateEnums=createEnums,
+            iCreateEnums=iCreateEnums,
             bTypeHints=typeHints,
         )
 

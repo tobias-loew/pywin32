@@ -26,6 +26,11 @@ import winerror
 from pywintypes import TimeType
 
 
+# constants for enumeration handling
+ENUMS_CREATE_INT_CONSTANTS = 0x1
+ENUMS_CREATE_ENUM_CLASSES = 0x2
+
+
 # It isn't really clear what the quoting rules are in a C/IDL string and
 # literals like a quote char and backslashes makes life a little painful to
 # always render the string perfectly - so just punt and fall-back to a repr()
@@ -184,7 +189,14 @@ class OleItem:
 class DispatchItem(OleItem):
     typename = "DispatchItem"
 
-    def __init__(self, typeinfo=None, attr=None, doc=None, bForUser=1, iCreateEnums=0):
+    def __init__(
+        self,
+        typeinfo=None,
+        attr=None,
+        doc=None,
+        bForUser=1,
+        iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
+    ):
         OleItem.__init__(self, doc)
         self.propMap = {}
         self.propMapGet = {}
@@ -344,7 +356,9 @@ class DispatchItem(OleItem):
         else:
             return None
 
-    def Build(self, typeinfo, attr, bForUser=1, iCreateEnums=0):
+    def Build(
+        self, typeinfo, attr, bForUser=1, iCreateEnums=ENUMS_CREATE_INT_CONSTANTS
+    ):
         self.clsid = attr[0]
         self.bIsDispatch = (attr.wTypeFlags & pythoncom.TYPEFLAG_FDISPATCHABLE) != 0
         if typeinfo is None:
@@ -386,7 +400,12 @@ class DispatchItem(OleItem):
         return ins, out, opts
 
     def MakeFuncMethod(
-        self, entry, name, bMakeClass=1, bTypeHints=False, iCreateEnums=0
+        self,
+        entry,
+        name,
+        bMakeClass=1,
+        bTypeHints=False,
+        iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
     ):
         # If we have a type description, and not varargs...
         if entry.desc is not None and (len(entry.desc) < 6 or entry.desc[6] != -1):
@@ -399,7 +418,12 @@ class DispatchItem(OleItem):
             )
 
     def MakeDispatchFuncMethod(
-        self, entry, name, bMakeClass=1, bTypeHints=False, iCreateEnums=0
+        self,
+        entry,
+        name,
+        bMakeClass=1,
+        bTypeHints=False,
+        iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
     ):
         fdesc = entry.desc
         doc = entry.doc
@@ -420,7 +444,10 @@ class DispatchItem(OleItem):
 
         if bTypeHints:
             resultType = _MakeTypeHint(entry.resultDocumentation, fdesc[8][0])
-            linePostfix = ") -> " + resultType + ":"
+            if resultType is not None:
+                linePostfix = ") -> " + resultType + ":"
+            else:
+                linePostfix = "):"
         else:
             linePostfix = "):"
 
@@ -453,7 +480,9 @@ class DispatchItem(OleItem):
         retDesc = fdesc[8][:2]
         argsDesc = tuple([what[:2] for what in fdesc[2]])
 
-        if iCreateEnums != 0 and fdesc[8][5] == pythoncom.TKIND_ENUM:
+        if (iCreateEnums & ENUMS_CREATE_ENUM_CLASSES) != 0 and fdesc[8][
+            5
+        ] == pythoncom.TKIND_ENUM:
             # here we can encode the enum-name as type
             # resclsid = _MakeResultTypeCreator(entry.resultDocumentation, fdesc[8][0])
             result_prefix = fdesc[8][4][0] + "("
@@ -551,7 +580,12 @@ class DispatchItem(OleItem):
         return ret
 
     def MakeVarArgsFuncMethod(
-        self, entry, name, bMakeClass=1, bTypeHints=False, iCreateEnums=0
+        self,
+        entry,
+        name,
+        bMakeClass=1,
+        bTypeHints=False,
+        iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
     ):
         fdesc = entry.desc
         names = entry.names
@@ -579,7 +613,9 @@ class DispatchItem(OleItem):
 
 # Note - "DispatchItem" poorly named - need a new intermediate class.
 class VTableItem(DispatchItem):
-    def Build(self, typeinfo, attr, bForUser=1, iCreateEnums=0):
+    def Build(
+        self, typeinfo, attr, bForUser=1, iCreateEnums=ENUMS_CREATE_INT_CONSTANTS
+    ):
         DispatchItem.Build(self, typeinfo, attr, bForUser, iCreateEnums)
         assert typeinfo is not None, "Cant build vtables without type info!"
 
@@ -616,17 +652,18 @@ typeSubstMap = {
 
 
 def _MakeTypeHint(doc, vt):
-    if doc:
+    if type(doc) == tuple:
         resultType = doc[0]
     else:
         resultType = NativeTypeMap.get(vt & 0xFFF)
-    if vt & 0x2000:
-        resultType = "typing.List[" + resultType + "]"
+    if resultType is not None:
+        if vt & 0x2000:
+            resultType = "typing.List[" + resultType + "]"
     return resultType
 
 
 def _MakeResultTypeCreator(doc, vt):
-    if doc:
+    if type(doc) == tuple:
         resultType = doc[0]
     else:
         resultType = NativeTypeMap.get(vt & 0xFFF)
@@ -703,7 +740,7 @@ def _ResolveType(typerepr, itypeinfo, iCreateEnums):
                 return pythoncom.VT_I4, None, None, typeKind
 
             elif typeKind in [pythoncom.TKIND_ENUM]:
-                if iCreateEnums != 0:
+                if (iCreateEnums & ENUMS_CREATE_ENUM_CLASSES) != 0:
                     retdoc = resultTypeInfo.GetDocumentation(-1)
                     return pythoncom.VT_I4, None, retdoc, typeKind
                 else:
@@ -884,7 +921,8 @@ def BuildCallList(
 
         if bTypeHints:
             resultType = _MakeTypeHint(thisdesc[4], thisdesc[0])
-            argName += ": " + resultType
+            if resultType is not None:
+                argName += ": " + resultType
 
         # insanely long lines with an 'encoding' flag crashes python 2.4.0
         # keep 5 args per line
