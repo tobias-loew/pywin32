@@ -79,7 +79,7 @@ import os
 import sys
 
 import pythoncom
-from win32com.client.build import ENUMS_CREATE_INT_CONSTANTS, ENUMS_CREATE_ENUM_CLASSES
+from win32com.client.build import ENUMS_CREATE_ENUM_CLASSES, ENUMS_CREATE_INT_CONSTANTS
 from win32com.client import Dispatch, gencache, genpy, selecttlb
 
 bForDemandDefault = 0  # Default value of bForDemand - toggle this to change the world - see also gencache.py
