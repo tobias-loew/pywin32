@@ -1267,28 +1267,46 @@ class Generator:
         print(file=self.file)
         if (self.iCreateEnums & build.ENUMS_CREATE_ENUM_CLASSES) != 0:
             if self.bEmbedRelaxedIntEnum:
-                print('class RelaxedIntEnum(IntEnum):',file=self.file)
-                print('    """Support for C/C++ style-enums"""',file=self.file)
-                print('',file=self.file)
-                print('    @classmethod',file=self.file)
-                print('    def _missing_(cls, value):',file=self.file)
-                print('        if not isinstance(value, int):',file=self.file)
-                print('            raise ValueError("%r is not a valid %s" % (value, cls.__name__))',file=self.file)
-                print('        new_member = cls._create_pseudo_member_(value)',file=self.file)
-                print('        return new_member',file=self.file)
-                print('',file=self.file)
-                print('    @classmethod',file=self.file)
-                print('    def _create_pseudo_member_(cls, value):',file=self.file)
-                print('        pseudo_member = cls._value2member_map_.get(value, None)',file=self.file)
-                print('        if pseudo_member is None:',file=self.file)
-                print('            # construct singleton pseudo-member',file=self.file)
-                print('            pseudo_member = int.__new__(cls, value)',file=self.file)
-                print('            pseudo_member._name_ = None',file=self.file)
-                print('            pseudo_member._value_ = value',file=self.file)
-                print('            # use setdefault in case another thread already created a composite',file=self.file)
-                print('            # with this value',file=self.file)
-                print('            pseudo_member = cls._value2member_map_.setdefault(value, pseudo_member)',file=self.file)
-                print('        return pseudo_member',file=self.file)
+                print("class RelaxedIntEnum(IntEnum):", file=self.file)
+                print('    """Support for C/C++ style-enums"""', file=self.file)
+                print("", file=self.file)
+                print("    @classmethod", file=self.file)
+                print("    def _missing_(cls, value):", file=self.file)
+                print("        if not isinstance(value, int):", file=self.file)
+                print(
+                    '            raise ValueError("%r is not a valid %s" % (value, cls.__name__))',
+                    file=self.file,
+                )
+                print(
+                    "        new_member = cls._create_pseudo_member_(value)",
+                    file=self.file,
+                )
+                print("        return new_member", file=self.file)
+                print("", file=self.file)
+                print("    @classmethod", file=self.file)
+                print("    def _create_pseudo_member_(cls, value):", file=self.file)
+                print(
+                    "        pseudo_member = cls._value2member_map_.get(value, None)",
+                    file=self.file,
+                )
+                print("        if pseudo_member is None:", file=self.file)
+                print("            # construct singleton pseudo-member", file=self.file)
+                print(
+                    "            pseudo_member = int.__new__(cls, value)",
+                    file=self.file,
+                )
+                print("            pseudo_member._name_ = None", file=self.file)
+                print("            pseudo_member._value_ = value", file=self.file)
+                print(
+                    "            # use setdefault in case another thread already created a composite",
+                    file=self.file,
+                )
+                print("            # with this value", file=self.file)
+                print(
+                    "            pseudo_member = cls._value2member_map_.setdefault(value, pseudo_member)",
+                    file=self.file,
+                )
+                print("        return pseudo_member", file=self.file)
                 print(file=self.file)
 
     def do_generate(self):
