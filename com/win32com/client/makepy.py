@@ -24,7 +24,7 @@ usageHelp = """ \
 
 Usage:
 
-  makepy.py [-i] [-v|q] [-h] [-u] [-e (constants,classes)] [-t] [-o output_file] [-d] [typelib, ...]
+  makepy.py [-i] [-v|q] [-h] [-u] [-e (constants,classes)] [-r] [-t] [-o output_file] [-d] [typelib, ...]
 
   -i    -- Show information for the specified typelib.
 
@@ -52,6 +52,8 @@ Usage:
            constants: generate int constants for enumeration entries
            classes: generate enum classes (requires at least version 3.4)
            NOTE: if -e is not specified then int constants are generated
+          
+  -r    -- Embed RelaxedIntEnum-class in generated file instead of importing it
           
   -t    -- Generate type hints  (requires at least version 3.7)
            
@@ -257,6 +259,7 @@ def GenerateFromTypeLibSpec(
     bBuildHidden=1,
     iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
     bTypeHints=False,
+    bEmbedRelaxedIntEnum=False,
 ):
     assert bUnicodeToString is None, "this is deprecated and will go away"
     if verboseLevel is None:
@@ -313,6 +316,7 @@ def GenerateFromTypeLibSpec(
             bBuildHidden=bBuildHidden,
             iCreateEnums=iCreateEnums,
             bTypeHints=bTypeHints,
+            bEmbedRelaxedIntEnum=bEmbedRelaxedIntEnum,
         )
 
         if file is None:
@@ -408,10 +412,11 @@ def main():
     doit = 1
     bForDemand = bForDemandDefault
     iCreateEnums = ENUMS_CREATE_INT_CONSTANTS
-    typeHints = 0
+    typeHints = False
+    embedRelaxedIntEnum = False
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqdte:")
+        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqdtre:")
         for o, v in opts:
             if o == "-h":
                 hiddenSpec = 0
@@ -441,6 +446,9 @@ def main():
                             iCreateEnums |= ENUMS_CREATE_ENUM_CLASSES
                 if iCreateEnums == 0:
                     iCreateEnums = ENUMS_CREATE_INT_CONSTANTS
+
+            elif o == "-r":
+                embedRelaxedIntEnum = True
 
             elif o == "-t":
                 typeHints = True
@@ -483,6 +491,7 @@ def main():
             bBuildHidden=hiddenSpec,
             iCreateEnums=iCreateEnums,
             bTypeHints=typeHints,
+            bEmbedRelaxedIntEnum=embedRelaxedIntEnum,
         )
 
     if f:
