@@ -24,7 +24,7 @@ usageHelp = """ \
 
 Usage:
 
-  makepy.py [-i] [-v|q] [-h] [-u] [-o output_file] [-d] [typelib, ...]
+  makepy.py [-i] [-v|q] [-h] [-u] [-e (constants,classes)] [-r] [-t] [-o output_file] [-d] [typelib, ...]
 
   -i    -- Show information for the specified typelib.
 
@@ -44,6 +44,16 @@ Usage:
   -d    -- Generate the base code now and the class code on demand.
            Recommended for large type libraries.
 
+  -e    -- Processing of enumerations in the typelib. Possible arguments 
+           (multiple arguments can be specified as comma separated list)
+           constants: generate int constants for enumeration entries
+           classes: generate enum classes (requires at least version 3.4)
+           NOTE: if -e is not specified then int constants are generated
+          
+  -r    -- Embed RelaxedIntEnum-class in generated file instead of importing it
+          
+  -t    -- Generate type hints  (requires at least version 3.7)
+           
   typelib -- A TLB, DLL, OCX or anything containing COM type information.
              If a typelib is not specified, a window containing a textbox
              will open from which you can select a registered type
@@ -69,6 +79,7 @@ import sys
 
 import pythoncom
 from win32com.client import Dispatch, gencache, genpy, selecttlb
+from win32com.client.build import ENUMS_CREATE_ENUM_CLASSES, ENUMS_CREATE_INT_CONSTANTS
 
 bForDemandDefault = 0  # Default value of bForDemand - toggle this to change the world - see also gencache.py
 
@@ -242,6 +253,9 @@ def GenerateFromTypeLibSpec(
     progressInstance=None,
     bForDemand=bForDemandDefault,
     bBuildHidden=1,
+    iCreateEnums=ENUMS_CREATE_INT_CONSTANTS,
+    bTypeHints=False,
+    bEmbedRelaxedIntEnum=False,
 ):
     if verboseLevel is None:
         verboseLevel = 0  # By default, we use no gui and no verbose level!
@@ -290,7 +304,15 @@ def GenerateFromTypeLibSpec(
     bToGenDir = file is None
 
     for typelib, info in typelibs:
-        gen = genpy.Generator(typelib, info.dll, progress, bBuildHidden=bBuildHidden)
+        gen = genpy.Generator(
+            typelib,
+            info.dll,
+            progress,
+            bBuildHidden=bBuildHidden,
+            iCreateEnums=iCreateEnums,
+            bTypeHints=bTypeHints,
+            bEmbedRelaxedIntEnum=bEmbedRelaxedIntEnum,
+        )
 
         if file is None:
             this_name = gencache.GetGeneratedFileName(
@@ -383,8 +405,12 @@ def main():
     verboseLevel = 1
     doit = 1
     bForDemand = bForDemandDefault
+    iCreateEnums = ENUMS_CREATE_INT_CONSTANTS
+    typeHints = False
+    embedRelaxedIntEnum = False
+
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqd")
+        opts, args = getopt.getopt(sys.argv[1:], "vo:huiqdtre:")
         for o, v in opts:
             if o == "-h":
                 hiddenSpec = 0
@@ -403,6 +429,23 @@ def main():
                 doit = 0
             elif o == "-d":
                 bForDemand = not bForDemand
+            elif o == "-e":
+                iCreateEnums = 0
+                if type(v) == str:
+                    enume_args = v.split(",")
+                    for enume_arg in enume_args:
+                        if enume_arg == "constants":
+                            iCreateEnums |= ENUMS_CREATE_INT_CONSTANTS
+                        elif enume_arg == "classes":
+                            iCreateEnums |= ENUMS_CREATE_ENUM_CLASSES
+                if iCreateEnums == 0:
+                    iCreateEnums = ENUMS_CREATE_INT_CONSTANTS
+
+            elif o == "-r":
+                embedRelaxedIntEnum = True
+
+            elif o == "-t":
+                typeHints = True
 
     except getopt.error as msg:
         sys.stderr.write(str(msg) + "\n")
@@ -436,6 +479,9 @@ def main():
             verboseLevel=verboseLevel,
             bForDemand=bForDemand,
             bBuildHidden=hiddenSpec,
+            iCreateEnums=iCreateEnums,
+            bTypeHints=typeHints,
+            bEmbedRelaxedIntEnum=embedRelaxedIntEnum,
         )
 
     if f:
