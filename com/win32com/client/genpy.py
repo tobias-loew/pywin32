@@ -698,6 +698,90 @@ class DispatchItem(build.DispatchItem, WritableItem):
                 )
         print("\t}", file=stream)
 
+        # generate typed properties
+        if generator.bTypeHints:
+            all_names = set(self.propMap.keys()) | set(self.propMapGet.keys()) | set(self.propMapPut.keys())
+
+            for name in all_names:
+                is_visible = generator.bBuildHidden
+                if not is_visible:
+                     if name in self.propMap:
+                        entry = self.propMap[name]
+                        is_visible = not entry.hidden
+
+                if not is_visible:
+                     if name in self.propMapGet:
+                        entry = self.propMapGet[name]
+                        is_visible = not entry.hidden
+
+                if not is_visible:
+                     if name in self.propMapPut:
+                        entry = self.propMapPut[name]
+                        is_visible = not entry.hidden
+
+                if is_visible:
+                    # generate getter
+
+                    type_hint_get = ''
+                    entry = None
+                    is_readable = False
+
+                    if name in self.propMapGet:
+                        is_readable = True
+                        entry = self.propMapGet[name]
+                        thisdesc = entry.desc[8]
+                        type_hint_get = build._MakeTypeHint(thisdesc[4], thisdesc[0])
+                    if entry is None:
+                        if name in self.propMap:
+                            is_readable = True
+                            entry = self.propMap[name]
+                            thisdesc = entry.desc[8]
+                            type_hint_get = build._MakeTypeHint(thisdesc[4], thisdesc[0])
+
+                    if bool(type_hint_get):
+                        type_hint_get = ' -> ' + type_hint_get
+                    else:
+                        type_hint_get = ''
+
+                    print("\n\t@property", file=stream)
+                    print(f"\tdef {name}(self){type_hint_get}:", file=stream)
+                    if is_readable:
+                        print(f"\t\treturn self.__getattr__('{name}')", file=stream)
+                    else:
+                        print(f"\t\traise AttributeError(\"{name} is not readable\")", file=stream)
+
+
+
+                    type_hint_set = ''
+                    entry = None
+                    is_writable = False
+
+                    if name in self.propMapPut:
+                        is_writable = True
+                        entry = self.propMapPut[name]
+                        thisdesc = entry.desc[2][0]
+                        type_hint_set = build._MakeTypeHint(thisdesc[4], thisdesc[0])
+                    if entry is None:
+                        if name in self.propMap:
+                            is_writable = True
+                            entry = self.propMap[name]
+                            thisdesc = entry.desc[8]
+                            type_hint_set = build._MakeTypeHint(thisdesc[4], thisdesc[0])
+
+                    if is_writable: # nothing to do for read-only properties
+                        if bool(type_hint_set):
+                            type_hint_set = ': ' + type_hint_set
+                        else:
+                            type_hint_set = ''
+
+                        print(f"\n\t@{name}.setter", file=stream)
+                        print(f"\tdef {name}(self, v{type_hint_set}):", file=stream)
+                        if is_writable:
+                            print(f"\t\tself.__setattr__('{name}', v)", file=stream)
+                        else:
+                            print(f"\t\traise AttributeError(\"{name} is not writable\")", file=stream)
+
+
         if specialItems["value"]:
             entry, invoketype, propArgs = specialItems["value"]
             if propArgs is None:
@@ -814,6 +898,7 @@ class CoClassItem(build.OleItem, WritableItem):
         self.sources = sources
         self.interfaces = interfaces
         self.bIsDispatch = 1  # Pretend it is so it is written to the class map.
+        self.bCanCreate = (attr.wTypeFlags & pythoncom.TYPEFLAG_FCANCREATE) != 0
 
     def WriteClass(self, generator):
         generator.checkWriteCoClassBaseClass()
@@ -891,6 +976,16 @@ class CoClassItem(build.OleItem, WritableItem):
             else:
                 defName = repr(str(defItem.clsid))  # really the iid.
             print(f"\tdefault_interface = {defName}", file=stream)
+
+            if self.bCanCreate:
+                print("\t@classmethod", file=stream)
+                if generator.bTypeHints:
+                    print(f"\tdef CreateDispatch(cls) -> {defName}:", file=stream)
+                else:
+                    print("\tdef CreateDispatch(cls):", file=stream)
+                print("\t\treturn cls()._dispobj_", file=stream)
+
+
         self.bWritten = 1
         print(file=stream)
 
@@ -1266,13 +1361,13 @@ class Generator:
                     file=self.file,
                 )
                 print(
-                    "        new_member = cls._create_pseudo_member_(value)",
+                    "        new_member = cls._create_pseudo_member(value)",
                     file=self.file,
                 )
                 print("        return new_member", file=self.file)
                 print("", file=self.file)
                 print("    @classmethod", file=self.file)
-                print("    def _create_pseudo_member_(cls, value):", file=self.file)
+                print("    def _create_pseudo_member(cls, value):", file=self.file)
                 print(
                     "        pseudo_member = cls._value2member_map_.get(value, None)",
                     file=self.file,
