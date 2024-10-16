@@ -16,11 +16,11 @@ class RelaxedIntEnum(IntEnum):
     def _missing_(cls, value):
         if not isinstance(value, int):
             raise ValueError("%r is not a valid %s" % (value, cls.__name__))
-        new_member = cls._create_pseudo_member_(value)
+        new_member = cls._create_pseudo_member(value)
         return new_member
 
     @classmethod
-    def _create_pseudo_member_(cls, value):
+    def _create_pseudo_member(cls, value):
         pseudo_member = cls._value2member_map_.get(value, None)
         if pseudo_member is None:
             # construct singleton pseudo-member
