@@ -688,7 +688,7 @@ class DispatchItem(build.DispatchItem, WritableItem):
 
         # generate typed properties
         if generator.bTypeHints:
-            all_names = set(self.propMap.keys()) | set(self.propMapGet.keys()) | set(self.propMapPut.keys())
+            all_names = sorted(set(self.propMap.keys()) | set(self.propMapGet.keys()) | set(self.propMapPut.keys()))
 
             for name in all_names:
                 is_visible = generator.bBuildHidden
