@@ -257,7 +257,7 @@ class BasicWrapPolicy:
                     if i[0] != "{":
                         i = pythoncom.InterfaceNames[i]
                     else:
-                        i = pythoncom.MakeIID(i)
+                        i = pywintypes.IID(i)
                 self._com_interfaces_.append(i)
         else:
             self._com_interfaces_ = []
@@ -321,7 +321,7 @@ class BasicWrapPolicy:
 
     # IDispatchEx support for policies.  Most of the IDispathEx functionality
     # by default will raise E_NOTIMPL.  Thus it is not necessary for derived
-    # policies to explicitely implement all this functionality just to not implement it!
+    # policies to explicitly implement all this functionality just to not implement it!
 
     def _GetDispID_(self, name, fdex):
         return self._getdispid_(name, fdex)

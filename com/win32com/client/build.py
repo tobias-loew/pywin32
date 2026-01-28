@@ -16,6 +16,7 @@ dynamically, or possibly even generate .html documentation for objects.
 #
 #        OleItem, DispatchItem, MapEntry, BuildCallList() is used by makepy
 
+import builtins
 import datetime
 import string
 from itertools import chain
@@ -150,9 +151,8 @@ class MapEntry:
         rc = self.GetResultCLSID()
         if rc is None:
             return "None"
-        return repr(
-            str(rc)
-        )  # Convert the IID object to a string, then to a string in a string.
+        # Convert the IID object to a string in a string.
+        return f"'{rc}'"
 
     def GetResultName(self):
         if self.resultDocumentation is None:
@@ -535,8 +535,7 @@ class DispatchItem(OleItem):
             rd = retDesc[0]
             if rd in NoTranslateMap:
                 s = (
-                    "%s\treturn %sself._oleobj_.InvokeTypes(%d, LCID, %s, %s, %s%s)%s"
-                    % (
+                    "{}\treturn {}self._oleobj_.InvokeTypes({}, LCID, {}, {}, {}{}){}".format(
                         linePrefix,
                         result_prefix,
                         id,
@@ -548,12 +547,12 @@ class DispatchItem(OleItem):
                     )
                 )
             elif rd in [pythoncom.VT_DISPATCH, pythoncom.VT_UNKNOWN]:
-                s = "%s\tret = self._oleobj_.InvokeTypes(%d, LCID, %s, %s, %s%s)\n" % (
+                s = "{}\tret = self._oleobj_.InvokeTypes({}, LCID, {}, {}, {!r}{})\n".format(
                     linePrefix,
                     id,
                     fdesc[4],
                     retDesc,
-                    repr(argsDesc),
+                    argsDesc,
                     _BuildArgList(fdesc, names),
                 )
                 s += f"{linePrefix}\tif ret is not None:\n"
@@ -567,18 +566,16 @@ class DispatchItem(OleItem):
                     )
                     s += f"{linePrefix}\t\texcept pythoncom.error:\n"
                     s += f"{linePrefix}\t\t\treturn ret\n"
-                s += "{}\t\tret = Dispatch(ret, {}, {})\n".format(
-                    linePrefix, repr(name), resclsid
-                )
-                s += "%s\treturn ret" % linePrefix
+                s += f"{linePrefix}\t\tret = Dispatch(ret, {name!r}, {resclsid})\n"
+                s += f"{linePrefix}\treturn ret"
             elif rd == pythoncom.VT_BSTR:
                 s = f"{linePrefix}\t# Result is a Unicode object\n"
-                s += "%s\treturn self._oleobj_.InvokeTypes(%d, LCID, %s, %s, %s%s)" % (
+                s += "{}\treturn self._oleobj_.InvokeTypes({}, LCID, {}, {}, {!r}{})".format(
                     linePrefix,
                     id,
                     fdesc[4],
                     retDesc,
-                    repr(argsDesc),
+                    argsDesc,
                     _BuildArgList(fdesc, names),
                 )
             # else s remains None
@@ -594,27 +591,27 @@ class DispatchItem(OleItem):
                         result_postfix = ")"
 
 
-                    s = "%s\treturn %sself._ApplyTypes_(%d, %s, %s, %s, %s, %s%s)%s" % (
+                    s = "{}\treturn {}self._ApplyTypes_({}, {}, {}, {}, {!r}, {}{}){}".format(
                         linePrefix,
                         result_prefix,
                         id,
                         fdesc[4],
                         retDesc,
                         argsDesc,
-                        repr(name),
+                        name,
                         resclsid,
                         _BuildArgList(fdesc, names),
                         result_postfix,
                     )
 
                 else:
-                    s = "%s\tret = self._ApplyTypes_(%d, %s, %s, %s, %s, %s%s)\n" % (
+                    s = "{}\tret = self._ApplyTypes_({}, {}, {}, {}, {!r}, {}{})\n".format(
                         linePrefix,
                         id,
                         fdesc[4],
                         retDesc,
                         argsDesc,
-                        repr(name),
+                        name,
                         resclsid,
                         _BuildArgList(fdesc, names),
                     )
@@ -661,14 +658,14 @@ class DispatchItem(OleItem):
                     # )
 
             else:
-                s = "%s\treturn %sself._ApplyTypes_(%d, %s, %s, %s, %s, %s%s)%s" % (
+                s = "{}\treturn {}self._ApplyTypes_({}, {}, {}, {}, {!r}, {}{}){}".format(
                     linePrefix,
                     result_prefix,
                     id,
                     fdesc[4],
                     retDesc,
                     argsDesc,
-                    repr(name),
+                    name,
                     resclsid,
                     _BuildArgList(fdesc, names),
                     result_postfix,
@@ -792,7 +789,6 @@ def _ResolveType(typerepr, itypeinfo, iCreateEnums):
             if was_user and subrepr in [
                 pythoncom.VT_DISPATCH,
                 pythoncom.VT_UNKNOWN,
-                pythoncom.VT_RECORD,
             ]:
                 # Drop the VT_PTR indirection
                 return subrepr, sub_clsid, sub_doc, typeKind
@@ -922,13 +918,16 @@ def MakePublicAttributeName(className, is_global=False):
         if ret == className:
             ret = ret.upper()
         return ret
-    elif is_global and hasattr(__builtins__, className):
+    elif is_global and hasattr(builtins, className):
         # builtins may be mixed case.  If capitalizing it doesn't change it,
         # force to all uppercase (eg, "None", "True" become "NONE", "TRUE"
         ret = className.capitalize()
         if ret == className:  # didn't change - force all uppercase.
             ret = ret.upper()
         return ret
+    elif className.isidentifier():
+        # some COM objects have identifiers with national characters
+        return className
     # Strip non printable chars
     return "".join([char for char in className if char in valid_identifier_chars])
 

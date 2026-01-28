@@ -462,12 +462,6 @@ class CScintillaView(docview.CtrlView, control.CScintillaColorEditInterface):
         return 1
 
     def _AutoComplete(self):
-        def list2dict(l):
-            ret = {}
-            for i in l:
-                ret[i] = None
-            return ret
-
         self.SCIAutoCCancel()  # Cancel old auto-complete lists.
         # First try and get an object without evaluating calls
         ob = self._GetObjectAtPos(bAllowCalls=0)
@@ -480,17 +474,19 @@ class CScintillaView(docview.CtrlView, control.CScintillaColorEditInterface):
                 # extra attributes of win32ui objects
                 if hasattr(ob, "_obj_"):
                     try:
-                        items_dict.update(list2dict(dir(ob._obj_)))
+                        items_dict.update(dict.fromkeys(dir(ob._obj_)))
                     except AttributeError:
                         pass  # object has no __dict__
 
                 # normal attributes
                 try:
-                    items_dict.update(list2dict(dir(ob)))
+                    items_dict.update(dict.fromkeys(dir(ob)))
                 except AttributeError:
                     pass  # object has no __dict__
                 if hasattr(ob, "__class__"):
-                    items_dict.update(list2dict(_get_class_attributes(ob.__class__)))
+                    items_dict.update(
+                        dict.fromkeys(_get_class_attributes(ob.__class__))
+                    )
                 # The object may be a COM object with typelib support - let's see if we can get its props.
                 # (contributed by Stefan Migowsky)
                 try:
@@ -512,9 +508,7 @@ class CScintillaView(docview.CtrlView, control.CScintillaColorEditInterface):
                         pass
             except:
                 win32ui.SetStatusText(
-                    "Error attempting to get object attributes - {}".format(
-                        repr(sys.exc_info()[0])
-                    )
+                    f"Error attempting to get object attributes - {sys.exc_info()[0]!r}"
                 )
 
         items = [
@@ -749,7 +743,7 @@ class CScintillaView(docview.CtrlView, control.CScintillaColorEditInterface):
             pageStart = self.FormatRange(dc, pageStart, textLen, rc, 0)
             maxPage += 1
             self.starts[maxPage] = pageStart
-        # And a sentinal for one page past the end
+        # And a sentinel for one page past the end
         self.starts[maxPage + 1] = textLen
         # When actually printing, maxPage doesn't have any effect at this late state.
         # but is needed to make the Print Preview work correctly.

@@ -751,7 +751,7 @@ PyObject *MyCreateProcessAsUser(
 	SECURITY_ATTRIBUTES *INPUT_NULLOK, // @pyparm <o PySECURITY_ATTRIBUTES>|threadAttributes||thread security attributes, or None
 	BOOL bInheritHandles, // @pyparm int|bInheritHandles||handle inheritance flag
 	DWORD dwCreationFlags, // @pyparm int|dwCreationFlags||creation flags
-	PyObject *env, // @pyparm None|newEnvironment||A dictionary of stringor Unicode pairs to define the environment for the process, or None to inherit the current environment.
+	PyObject *env, // @pyparm None|newEnvironment||A dictionary of string or Unicode pairs to define the environment for the process, or None to inherit the current environment.
 	TCHAR *INPUT_NULLOK, // @pyparm string|currentDirectory||current directory name, or None
 	STARTUPINFO *lpStartupInfo // @pyparm <o PySTARTUPINFO>|startupinfo||a STARTUPINFO object that specifies how the main window for the new process should appear.
 );
@@ -1686,23 +1686,18 @@ PyObject *PyWriteProcessMemory(PyObject *self, PyObject *args)
 	if (PyType_Ready(&PySTARTUPINFOType) == -1)
 		return NULL;
 
-	FARPROC fp=NULL;
-	HMODULE hmodule=NULL;
-	hmodule=GetModuleHandle(_T("Psapi.dll"));
-	if (hmodule==NULL)
-		hmodule=LoadLibrary(_T("Psapi.dll"));
-	if (hmodule!=NULL){
+	FARPROC fp = NULL;
+	HMODULE hmodule = PyWin_GetOrLoadLibraryHandle("psapi.dll");
+	if (hmodule != NULL) {
 		pfnEnumProcesses = (EnumProcessesfunc)GetProcAddress(hmodule, "EnumProcesses");
 		pfnEnumProcessModules = (EnumProcessModulesfunc)GetProcAddress(hmodule, "EnumProcessModules");
 		pfnEnumProcessModulesEx = (EnumProcessModulesExfunc)GetProcAddress(hmodule, "EnumProcessModulesEx");
 		pfnGetModuleFileNameEx = (GetModuleFileNameExfunc)GetProcAddress(hmodule, "GetModuleFileNameExW");
 		pfnGetProcessMemoryInfo = (GetProcessMemoryInfofunc)GetProcAddress(hmodule, "GetProcessMemoryInfo");
-		}
+	}
 
-	hmodule=GetModuleHandle(_T("Kernel32.dll"));
-	if (hmodule==NULL)
-		hmodule=LoadLibrary(_T("Kernel32.dll"));
-	if (hmodule!=NULL){
+	hmodule = PyWin_GetOrLoadLibraryHandle("kernel32.dll");
+	if (hmodule != NULL) {
 		pfnGetProcessTimes=(GetProcessTimesfunc)GetProcAddress(hmodule,"GetProcessTimes");
 		pfnGetProcessIoCounters=(GetProcessIoCountersfunc)GetProcAddress(hmodule,"GetProcessIoCounters");
 		pfnGetProcessShutdownParameters=(GetProcessShutdownParametersfunc)GetProcAddress(hmodule,"GetProcessShutdownParameters");
@@ -1720,15 +1715,13 @@ PyObject *PyWriteProcessMemory(PyObject *self, PyObject *args)
 		pfnSetProcessAffinityMask=(SetProcessAffinityMaskfunc)GetProcAddress(hmodule,"SetProcessAffinityMask");
 		pfnGetProcessId=(GetProcessIdfunc)GetProcAddress(hmodule, "GetProcessId");
 		pfnIsWow64Process=(IsWow64Processfunc)GetProcAddress(hmodule, "IsWow64Process");
-		}
+	}
 
-	hmodule=GetModuleHandle(_T("User32.dll"));
-	if (hmodule==NULL)
-		hmodule=LoadLibrary(_T("User32.dll"));
-	if (hmodule!=NULL){
+	hmodule = PyWin_GetOrLoadLibraryHandle("user32.dll");
+	if (hmodule != NULL) {
 		pfnGetProcessWindowStation=(GetProcessWindowStationfunc)GetProcAddress(hmodule,"GetProcessWindowStation");
 		pfnGetGuiResources=(GetGuiResourcesfunc)GetProcAddress(hmodule,"GetGuiResources");
-		}
+	}
 
 // *sob* - these symbols don't exist in the platform sdk needed to build
 // using Python 2.3
